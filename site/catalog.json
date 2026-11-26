@@ -1,0 +1,18 @@
+[
+  {
+    "title": "Night Signal",
+    "genre": "Memory",
+    "description": "Watch the constellation flash, then echo its signal.",
+    "mark": "✧",
+    "color": "#805299",
+    "id": "night-signal"
+  },
+  {
+    "title": "Tideline",
+    "genre": "Strategy",
+    "description": "Read the tide. Chart the richest route in six moves.",
+    "mark": "≋",
+    "color": "#177e81",
+    "id": "tideline"
+  }
+]
