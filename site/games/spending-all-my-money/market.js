@@ -62,9 +62,9 @@ function resale(x,now=Date.now()){
  const offer=ageOffer(x,now),event=eventFactor(x.id,3,now),condition=x.fault ? .4 : x.restored ? 1.3 : 1;
  return {value:Math.floor(offer.value*condition*event),label:offer.label+(x.fault?' As-is condition: −60%.':x.restored?' Restored: +30%.':'')+(event>1?' '+townEvent(now)[0]+' premium.':'')};
 }
-const costBasis=x=>x.paid+(x.parts||0)+(x.finishSpend||0);
+const costBasis=x=>x.paid+(x.parts||0)+(x.finishSpend||0)+(x.auctionFees||0);
 function difference(paid,value){const delta=value-paid;return delta===0?'break even':'$'+Math.abs(delta)+' '+(delta>0?'profit':'loss')}
-const fresh=()=>({colorBox:{tubes:{},sold:[]},made:[],wishes:[],patron:0,visits:[0,0,0],auction:{price:0,closed:false},lockerOpened:false,job:0,rewarded:[],sound:false,cash:80,spent:0,tier:0,bag:[],sets:[],start:Date.now(),delivery:0,seed:Math.floor(Math.random()*4294967296),advanced:false,shifts:0,sort:'packed',order:0,ready:false,guestReady:null,guestClaimed:null,guestHistory:[],buyerReceipt:null,club:null});
+const fresh=()=>({consignments:{lots:[],history:[]},colorBox:{tubes:{},sold:[]},made:[],wishes:[],patron:0,visits:[0,0,0],auction:{price:0,closed:false},lockerOpened:false,job:0,rewarded:[],sound:false,cash:80,spent:0,tier:0,bag:[],sets:[],start:Date.now(),delivery:0,seed:Math.floor(Math.random()*4294967296),advanced:false,shifts:0,sort:'packed',order:0,ready:false,guestReady:null,guestClaimed:null,guestHistory:[],buyerReceipt:null,club:null});
 let state=fresh();
 try{const s=JSON.parse(localStorage.getItem(key));if(s&&Array.isArray(s.bag)&&tiers[s.tier]){Object.assign(state,s);if(!('patron' in s))state.patron=null}}catch{}
 for(const item of state.bag){
@@ -188,7 +188,7 @@ function rememberGuest(slot){const theme=slot%rotatingThemes.length;if(!state.gu
 if(state.guestClaimed!=null)rememberGuest(state.guestClaimed);
 function save(){try{localStorage.setItem(key,JSON.stringify(state))}catch{}}
 const size=i=>rows[i][3]||1;
-const used=()=>state.bag.reduce((n,x)=>n+size(x.id),0);
+const used=()=>state.bag.reduce((n,x)=>n+size(x.id),0)+state.consignments.lots.reduce((n,l)=>n+size(l.item.id),0);
 function quote(i,now){const interval=45000, window=18000;
  const elapsed=Math.max(0,now-state.start);
  const phase=(elapsed+i*7919)%interval;
@@ -261,7 +261,7 @@ function catalog(){let found=0;const term=$('search').value.trim().toLowerCase()
  if(!found&&term){const missing=rows.slice(0,craftStart).findIndex((r,i)=>r[1].toLowerCase()===term&&!onShelf(i));$('empty').textContent=missing<0?'No finds match these filters.':rows[missing][1]+' returns at '+localTime(nextOpening(missing))+'.'}else $('empty').textContent='No finds match these filters.';wishlistUI();$('townEvent').textContent=townEvent()[0]+' · '+townEvent()[1]+' until '+localTime((boardSlot()+1)*boardInterval);prices()}
 for(const dept of [...new Set(departments)].sort())$('department').add(new Option(dept,dept));
 $('search').oninput=catalog;$('department').onchange=catalog;
-$('delivery').onclick=()=>{advanceVillage();state.delivery++;state.colorBox.sold=[];state.auction={price:0,closed:false};state.lockerOpened=false;save();catalog();paintDistrict();chime('pack');motion($('items'),[{opacity:.4},{opacity:1}],300)};
+$('delivery').onclick=()=>{closeConsignments();advanceVillage();state.delivery++;state.colorBox.sold=[];state.auction={price:0,closed:false};state.lockerOpened=false;save();catalog();render();chime('pack');motion($('items'),[{opacity:.4},{opacity:1}],300)};
 function review(id){
  const {spec,reviews,average}=cards[id].feed;let page=0,ordered=reviews;
  function paint(){const entry=ordered[page];$('stars').textContent='★'.repeat(entry.rating)+'☆'.repeat(5-entry.rating);$('stars').setAttribute('aria-label',entry.rating+' out of 5 stars');$('reviewText').textContent=entry.body;$('reviewBy').textContent=entry.by+' · Review '+(page+1)+' of '+ordered.length}
@@ -284,10 +284,11 @@ function render(){paintDistrict();$('clubOpen').textContent='★ '+state.club.po
  $('sort').value=state.sort;
  sorted.forEach(({item,index})=>{
    const [icon,name]=rows[item.id],tile=document.createElement('button');
-   tile.className='packed';tile.style.gridColumn='span '+size(item.id);
+   tile.className=item.trophy?'packed displayed':'packed';tile.style.gridColumn='span '+size(item.id);
    tile.innerHTML='<span aria-hidden="true">'+icon+'</span><small>'+name+'</small>';
-   tile.style.borderBottom='5px solid '+(inks[item.color]||'#917959');tile.lastElementChild.textContent=(vintage(item)?'Vintage · ':'')+itemName(item);tile.setAttribute('aria-label','Inspect '+itemName(item));tile.onclick=()=>inspect(index);$('stock').append(tile);
+   tile.style.borderBottom='5px solid '+(inks[item.color]||'#917959');tile.lastElementChild.textContent=(vintage(item)?'Vintage · ':'')+itemName(item);if(item.trophy)appendText(tile,'b','🏆 On display');tile.setAttribute('aria-label','Inspect '+itemName(item)+(item.trophy?' · on trophy shelf':''));tile.onclick=()=>inspect(index);$('stock').append(tile);
  });
+ for(const l of state.consignments.lots){const slot=appendText($('stock'),'div',rows[l.item.id][0]+' At auction');slot.className='vacant onloan';slot.style.gridColumn='span '+size(l.item.id)}
  for(let n=used();n<Math.min(cap,used()+24);n++){
    const slot=document.createElement('div');slot.className='vacant';slot.setAttribute('aria-hidden','true');$('stock').append(slot);
  }
@@ -325,10 +326,12 @@ function inspect(index){
  const item=state.bag[index],[icon,name]=rows[item.id];$('detailIcon').textContent=icon;$('itemTitle').textContent=itemName(item);
  $('itemInfo').textContent=(item.edition?grades[item.grade]+' · Delivery '+item.edition:'Original issue')+(vintage(item)?' · Vintage / '+grades[heldGrade(item)]:'')+' · Full retail $'+item.retail+(item.crafted?' · Build cost $':' · Paid $')+item.paid+' · '+size(item.id)+' storage slot'+(size(item.id)>1?'s':'');
  $('itemTrophy').textContent=item.trophy?'Take off trophy shelf':'Display on trophy shelf';$('itemTrophy').onclick=()=>{$('itemDialog').close();toggleTrophy(item)};
+ $('consignItem').disabled=Boolean(item.trophy);$('consignItem').onclick=()=>{$('itemDialog').close();previewConsignment(item)};
  $('sellItem').disabled=$('tossItem').disabled=Boolean(item.trophy);
  if(item.crafted)$('itemInfo').textContent+=' · Materials: '+item.materials.join(', ')+' · Cost includes $'+item.fee+' assembly.';
  $('recolorItem').hidden=item.trophy||medium(item.id)==null;$('recolorItem').onclick=()=>{$('itemDialog').close();openColors(item)};
  if(item.finishSpend)$('itemInfo').textContent+=' · Original retail $'+item.baseRetail+' · Pigments $'+item.finishSpend;
+ if(item.auctionFees)$('itemInfo').textContent+=' · Prior auction fees $'+item.auctionFees;
  if(item.parts)$('itemInfo').textContent+=' · Parts $'+item.parts;
  const offer=netOffer(item);$('valuation').textContent=offer.label+' Current offer $'+offer.value+' · '+difference(costBasis(item),offer.value)+'.';
  $('sellItem').textContent='Sell for $'+offer.value;

@@ -77,14 +77,14 @@ const auctionLots=[54,39,27,30,56,42,48,78,63,72,21,67];
 function auctionInfo(){const id=auctionLots[roll(19,auctionLots.length)],retail=regular(id);
  const rivals=[['Gus','Audio'],['Bea','Clothing'],['Inez','Photography']];
  return {id,start:Math.max(2,Math.floor(retail*.28)),step:Math.max(2,Math.ceil(retail*.08)),
- rivals:rivals.map(([name,taste],i)=>({name,taste,limit:Math.floor(retail*((departments[group(id)]===taste ? .95 : .36)+roll(23+i,36)/100))}))}}
+ rivals:rivals.map(([name,taste],i)=>({name,taste,limit:Math.min(roundPurse([1,3,2][i]),Math.floor(retail*((departments[group(id)]===taste ? .95 : .36)+roll(23+i,36)/100)))}))}}
 function bid(){
  const a=auctionInfo(),sale=state.auction;if(sale.closed)return;
  const bid=sale.price?sale.price+a.step:a.start;
  if(bid>state.cash||used()+size(a.id)>tiers[state.tier][1])return notice('Bid needs $'+bid+' and '+size(a.id)+' free slots.');
  const rival=a.rivals.filter(r=>r.limit>=bid+a.step).sort((x,y)=>x.limit-y.limit)[0];
  if(rival){sale.price=bid+a.step;sale.leader=rival.name;save();paintDistrict();chime('pack');return}
- sale.closed=true;sale.result='Won for $'+bid;const suffix=acquire([lotItem(a.id,bid)],bid);notice(sale.result+' · '+rows[a.id][1]+suffix,'purchase',true);
+ sale.closed=true;sale.playerWon=true;sale.result='Won for $'+bid;const suffix=acquire([lotItem(a.id,bid)],bid);notice(sale.result+' · '+rows[a.id][1]+suffix,'purchase',true);
 }
 const lockers=[
  {hint:'Record sleeves and a coiled audio cable',common:[10,55,9],prize:54},
@@ -131,9 +131,10 @@ function paintDistrict(){
  if(!broken.length)appendText(bench,'small','Look for as-is items in the shop. Their reviews reveal the fault.');
  for(const x of broken){const el=appendText(bench,'article','');appendText(el,'strong',itemName(x));appendText(el,'small',workshop[x.id][0]+' · As-is offer $'+resale(x).value+' · Restored offer $'+resale({...x,fault:false,restored:true}).value);
  action(el,x.parts?'Resume repair':'Fit '+workshop[x.id][2]+' · $'+partsCost(x),()=>repair(x))}
- wishlistUI();trophyUI();paintNeighborhood();paintCraft();paintColors();
+ wishlistUI();trophyUI();paintNeighborhood();paintCraft();paintColors();paintConsignments();
 }
 function setupDistrict(){
+ $('keepLot').onclick=()=>$('consignDialog').close();$('closeRound').onclick=()=>{if(state.consignments.lots.length)$('delivery').onclick()};
  $('closeColors').onclick=()=>$('colorDialog').close();
  $('craftClose').onclick=()=>$('craftDialog').close();
  rows.slice(0,craftStart).forEach((r,i)=>$('wishProduct').add(new Option(r[1],i)));dyeNames.forEach((n,i)=>$('wishColor').add(new Option(n,i)));grades.forEach((n,i)=>$('wishGrade').add(new Option(n+' or better',i)));

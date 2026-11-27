@@ -149,6 +149,7 @@ function paintProfile(r){
  body.replaceChildren();appendText(body,'strong',trustLabel(r.trust)+' · '+r.trust+' trust');
  appendText(body,'p','Likes '+departments[dept].toLowerCase()+' and '+dyeNames[p.color]+'. '+dispositions[p.trait].join(' · '));
  if(!away){
+  appendText(body,'small','Auction budget this delivery: $'+roundPurse(r.id)+'.');
   const talked=r.chat===v.turn;
   if(talked){const comments=['If you see anything in '+dyeNames[p.color]+', think of me.','My favorite aisle? '+departments[dept]+'. I could spend all day there.','Someone called my collection “inventory.” The nerve.','I knew this street before the shops had matching awnings.','There’s always room for one more good find. Somewhere.'];
    appendText(body,'blockquote',comments[neighborRoll(r.id,400+v.turn,comments.length)])}
