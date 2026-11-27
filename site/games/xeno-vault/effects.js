@@ -3,16 +3,32 @@ export function animateField(canvas,kind,targets,color,duration,paths=[]){
   const box=canvas.getBoundingClientRect(),w=box.width,h=box.height;
   const scale=Math.min(devicePixelRatio||1,2);
   canvas.width=w*scale;canvas.height=h*scale;
-  const ctx=canvas.getContext('2d');ctx.scale(scale,scale);
+  const ctx=canvas.getContext('2d');
+  if(!ctx || !w || !h || document.hidden)return;
+  ctx.scale(scale,scale);
   const point=pos=>[(Math.floor(pos/3)+.5)*w/5,(pos%3+.5)*h/3];
   const ring=(x,y,r)=>{ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.stroke();};
   const stroke=(x,y,a,b)=>{ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(a,b);ctx.stroke();};
   return new Promise(resolve=>{
     const start=performance.now();
+    let raf;
+    const deadline=setTimeout(finish,duration+250);
+    function finish(){
+      clearTimeout(deadline);cancelAnimationFrame(raf);
+      document.removeEventListener('visibilitychange',visibility);
+      canvas.width=canvas.width;
+      resolve();
+    }
+    function visibility(){if(document.hidden)finish();}
+    document.addEventListener('visibilitychange',visibility);
     function frame(now){
-      const t=Math.min(1,(now-start)/duration);
+      try{draw(now);}catch(error){console.warn('Skipped reel effect',error);finish();}
+    }
+    function draw(now){
+      // The first frame timestamp can precede start when a spin begins mid-frame.
+      const t=Math.max(0,Math.min(1,(now-start)/duration));
       ctx.clearRect(0,0,w,h);
-      if(t>=1){resolve();return;}
+      if(t>=1){finish();return;}
       ctx.strokeStyle=color;ctx.fillStyle=color;ctx.lineWidth=2;
       ctx.globalAlpha=Math.min(1,(1-t)*5);
       if(kind==='meteor'){
@@ -88,8 +104,8 @@ export function animateField(canvas,kind,targets,color,duration,paths=[]){
           stroke(x+r*Math.cos(a),y+r*Math.sin(a),x+(r+14)*Math.cos(a),y+(r+14)*Math.sin(a));
         }
       }
-      requestAnimationFrame(frame);
+      raf=requestAnimationFrame(frame);
     }
-    requestAnimationFrame(frame);
+    raf=requestAnimationFrame(frame);
   });
 }

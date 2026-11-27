@@ -116,8 +116,21 @@ $('spin').onclick=async()=>{
   clearFlare();wakeAudio();
   if(!state.free && state.credits<state.bet){state.credits+=1000;state.message='Refilled 1,000 free credits.';save();render();return;}
   const flight=state.free?state.mode:null;
-  if(!spin(state))return;play('launch');
+  if(!spin(state))return;
   busy=true;$('restart').disabled=true;save();$('spin').disabled=true;$('bet').disabled=true;$('status').textContent='Scanning the sector…';
+  try{
+    play('launch');
+    await presentSpin(flight);
+  }catch(error){
+    console.warn('Skipped spin presentation',error);
+  }finally{
+    for(const col of columns){col.querySelector('.strip')?.remove();col.classList.remove('roll');}
+    busy=false;render();
+  }
+  celebrate();
+  if(state.bonus || state.relay)play('contact');else if(state.last)play('dock');
+};
+async function presentSpin(flight){
   const quick=turbo || matchMedia('(prefers-reduced-motion: reduce)').matches;
   const viewport=document.querySelector('.viewport');
   viewport.classList.remove('active');
@@ -172,9 +185,7 @@ $('spin').onclick=async()=>{
       await animateField($('fx'),'line',[],'#9df2fa',turbo?110:390,paths);
     }
   }
-  busy=false;render();celebrate();
-  if(state.bonus || state.relay)play('contact');else if(state.last)play('dock');
-};
+}
 $('bet').onclick=()=>{state.bet=bets[(bets.indexOf(state.bet)+1)%bets.length];save();render();};
 $('sound').onclick=()=>{sound=!sound;wakeAudio();if(sound)play('dock');save();$('sound').textContent=sound?'Sound on':'Sound off';$('sound').setAttribute('aria-pressed',sound);};
 $('turbo').onclick=()=>{turbo=!turbo;save();$('turbo').textContent=turbo?'Turbo on':'Turbo off';$('turbo').setAttribute('aria-pressed',turbo);};
