@@ -116,7 +116,7 @@ $('clubOpen').onclick=()=>{paintClub();$('clubMessage').textContent='';$('clubDi
 $('rankUp').onclick=promoteRank;$('clubClose').onclick=()=>$('clubDialog').close();
 const variant=id=>{const v=lot(id,state.delivery,state.seed);if(id>=originalCount)v.grade=Math.max(2,v.grade);return v};
 let lastSlot=clockSlot();
-function syncClock(){const slot=clockSlot();if(slot===lastSlot)return;lastSlot=slot;unlock();save();catalog();render()}
+function syncClock(){const slot=clockSlot();if(slot===lastSlot)return;lastSlot=slot;tickVillage();unlock();save();catalog();render()}
 
 const regular=id=>retailPrice(id,variant(id).grade);
 const itemName=x=>(x.color==null?'Original':dyeNames[x.color])+' '+rows[x.id][1];
@@ -165,7 +165,7 @@ function fulfillOrders(){
   // Older saves can have a locked-in reward after the matching pieces were sold.
   const paid=pieces?pieces.reduce((sum,x)=>sum+costBasis(x),0):0;
   if(pieces)unpack(pieces);
-  const cash=purse(a),points=claimPoints(-1);state.cash+=cash;earn(points);state.order++;advancePatron();state.ready=false;
+  const cash=purse(a),points=claimPoints(-1);state.cash+=cash;earn(points);state.order++;if(pieces)orderFriendship(state.patron,pieces);advancePatron();state.ready=false;
   state.buyerReceipt=a.name+(pieces?' sold · '+pieces.length+' items · You paid $'+paid+' · '+difference(paid,cash):' · Prior earned reward')+' · +$'+cash+' · +'+points+' pts';
   filled++;
  }
@@ -256,7 +256,7 @@ function catalog(){let found=0;const term=$('search').value.trim().toLowerCase()
  if(!found&&term){const missing=rows.findIndex((r,i)=>r[1].toLowerCase()===term&&!onShelf(i));$('empty').textContent=missing<0?'No finds match these filters.':rows[missing][1]+' returns at '+localTime(nextOpening(missing))+'.'}else $('empty').textContent='No finds match these filters.';wishlistUI();$('townEvent').textContent=townEvent()[0]+' · '+townEvent()[1]+' until '+localTime((boardSlot()+1)*boardInterval);prices()}
 for(const dept of [...new Set(departments)].sort())$('department').add(new Option(dept,dept));
 $('search').oninput=catalog;$('department').onchange=catalog;
-$('delivery').onclick=()=>{state.delivery++;state.auction={price:0,closed:false};state.lockerOpened=false;save();catalog();paintDistrict();chime('pack');motion($('items'),[{opacity:.4},{opacity:1}],300)};
+$('delivery').onclick=()=>{advanceVillage();state.delivery++;state.auction={price:0,closed:false};state.lockerOpened=false;save();catalog();paintDistrict();chime('pack');motion($('items'),[{opacity:.4},{opacity:1}],300)};
 function review(id){
  const {spec,reviews,average}=cards[id].feed;let page=0,ordered=reviews;
  function paint(){const entry=ordered[page];$('stars').textContent='★'.repeat(entry.rating)+'☆'.repeat(5-entry.rating);$('stars').setAttribute('aria-label',entry.rating+' out of 5 stars');$('reviewText').textContent=entry.body;$('reviewBy').textContent=entry.by+' · Review '+(page+1)+' of '+ordered.length}
@@ -374,5 +374,5 @@ function shift(){
  options([dept,...shuffle([...new Set(departments)].filter(d=>d!==dept)).slice(0,2)],v=>v===dept?complete():status.textContent='That shelf belongs to another department. Try again.')}
  panel.showModal()}
 $('leave').onclick=()=>$('shift').close();$('work').onclick=()=>state.advanced?shift():pay();
-$('restart').onclick=()=>$('confirm').showModal();$('cancel').onclick=()=>$('confirm').close();$('reset').onclick=()=>{state=fresh();enroll();$('search').value='';$('department').value='';catalog();save();render();tab(false);notice('Fresh start!');$('confirm').close()};
-setupDistrict();unlock();save();catalog();tab(false);render();setInterval(()=>{if(lastSlot!==clockSlot())syncClock();else if(!$('store').hidden)prices()},500);
+$('restart').onclick=()=>$('confirm').showModal();$('cancel').onclick=()=>$('confirm').close();$('reset').onclick=()=>{state=fresh();enroll();setupNeighborhood();$('search').value='';$('department').value='';catalog();save();render();tab(false);notice('Fresh start!');$('confirm').close()};
+setupNeighbors();tickVillage();setupDistrict();unlock();save();catalog();tab(false);render();setInterval(()=>{if(lastSlot!==clockSlot())syncClock();else if(!$('store').hidden)prices()},500);
