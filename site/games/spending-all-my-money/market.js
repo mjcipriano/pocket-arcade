@@ -237,11 +237,13 @@ function buy(i){if(!onShelf(i)&&!early(i)){syncClock();return notice('This relea
 const cards=rows.map(([icon,name],i)=>{const el=document.createElement('article');
  el.innerHTML='<span class="icon">'+icon+'</span><h3>'+name+'</h3><small>'+collections[group(i)]+' · '+size(i)+' slot'+(size(i)>1?'s':'')+'</small><strong class="variant"></strong><button class="journal">Read reviews</button><span></span><button class="buy"></button>';
  el.querySelector('.journal').onclick=()=>review(i);const button=el.lastElementChild;button.onclick=()=>buy(i);$('items').append(el);
- return {el,button,label:button.previousElementSibling,badge:el.querySelector('.variant')}});
+ return {el,button,label:button.previousElementSibling,badge:el.querySelector('.variant'),journal:el.querySelector('.journal')}});
 function prices(){const now=Date.now();cards.forEach(({button,label,el},i)=>{if(el.hidden)return;const q=quote(i,now);button.dataset.price=q.cost;button.textContent='Buy · $'+q.cost;
  label.className=q.seconds?'sale':'';label.textContent=q.seconds?'Was $'+regular(i)+' · '+q.seconds+'s left':'Regular price';if(state.club.dealer)label.textContent+=' · Dealer −20%'})}
 function catalog(){let found=0;const term=$('search').value.trim().toLowerCase();
- cards.forEach(({el,badge},id)=>{const v=variant(id),dept=departments[group(id)];
+ cards.forEach((card,id)=>{const {el,badge,journal}=card;
+ if(card.issue!==state.delivery){card.issue=state.delivery;card.feed=reviewJournal(id,state.delivery);journal.textContent='★ '+card.feed.average+' · '+card.feed.reviews.length+' reviews'}
+ const v=variant(id),dept=departments[group(id)];
  badge.textContent=dyeNames[v.color]+' · '+grades[v.grade]+(id>=originalCount?(early(id)?' · Backroom preview':' · Timed release'):'');el.style.setProperty('--ink',inks[v.color]);
  el.hidden=Boolean((!onShelf(id)&&!early(id))||($('department').value==='timed'?id<originalCount:$('department').value&&$('department').value!==dept)||![rows[id][1],collections[group(id)],badge.textContent,dept].join(' ').toLowerCase().includes(term));if(!el.hidden)found++});
  $('empty').hidden=found>0;$('batch').textContent='Delivery '+(state.delivery+1)+' · '+found+' finds';$('releaseTime').textContent='Rare shelf changes at '+localTime((clockSlot()+1)*fiveMinutes);
@@ -250,10 +252,12 @@ for(const dept of [...new Set(departments)].sort())$('department').add(new Optio
 $('search').oninput=catalog;$('department').onchange=catalog;
 $('delivery').onclick=()=>{state.delivery++;save();catalog();chime('pack');motion($('items'),[{opacity:.4},{opacity:1}],300)};
 function review(id){
- const [spec,positive,caveat]=id<36?legacyProfiles[id]:rows[id].slice(4);let page=0;
- function paint(){const entry=[[5,positive,'Mira'],[4,caveat,'Jules']][page];$('stars').textContent='★'.repeat(entry[0])+'☆'.repeat(5-entry[0]);$('reviewText').textContent=entry[1];$('reviewBy').textContent=entry[2]+' · Review '+(page+1)+' of 2'}
+ const {spec,reviews,average}=cards[id].feed;let page=0,ordered=reviews;
+ function paint(){const entry=ordered[page];$('stars').textContent='★'.repeat(entry.rating)+'☆'.repeat(5-entry.rating);$('stars').setAttribute('aria-label',entry.rating+' out of 5 stars');$('reviewText').textContent=entry.body;$('reviewBy').textContent=entry.by+' · Review '+(page+1)+' of '+ordered.length}
  $('reviewTitle').textContent=rows[id][1];$('spec').textContent=spec+'. '+resale({id,grade:variant(id).grade,boughtAt:Date.now()}).label;
- $('prev').onclick=$('next').onclick=()=>{page=1-page;paint()};paint();$('reviews').showModal()}
+ $('reviewMean').textContent=average+' / 5 · '+reviews.length+' shopper reviews';$('reviewOrder').value='latest';
+ $('reviewOrder').onchange=()=>{const sort=$('reviewOrder').value;ordered=sort==='latest'?reviews:[...reviews].sort((a,b)=>sort==='low'?a.rating-b.rating:b.rating-a.rating);page=0;paint()};
+ $('prev').onclick=()=>{page=(page+ordered.length-1)%ordered.length;paint()};$('next').onclick=()=>{page=(page+1)%ordered.length;paint()};paint();$('reviews').showModal()}
 $('reviewClose').onclick=()=>$('reviews').close();
 function discard(index,sell,offer){const x=state.bag[index],value=sell?(offer??netOffer(x).value):0;if(sell&&state.club.broker)state.club.broker--;state.bag.splice(index,1);state.cash+=value;save();render();notice(sell?'Sold '+itemName(x)+' for $'+value+' · You paid $'+x.paid+' · '+difference(x.paid,value)+'.':'Tossed '+rows[x.id][1]+'.')}
 function render(){$('clubOpen').textContent='★ '+state.club.points;$('clubOpen').setAttribute('aria-label','Collector club, '+state.club.points+' points');const [tier,cap]=tiers[state.tier];$('wallet').textContent='$'+state.cash;$('score').textContent='$'+state.spent;$('space').textContent=tier+' '+used()+'/'+cap;
