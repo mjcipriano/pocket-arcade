@@ -15,7 +15,7 @@ const workshop={
  78:['Crown skips','Stopped at 8:12. Twice a day it’s the most accurate thing I own.','Crown stem']
 };
 function shopFault(id){return Boolean(workshop[id]&&(id===10||((state.delivery+id)%3===0)))}
-function partsCost(x){return Math.max(3,Math.round(x.retail*.12))}
+function partsCost(x){return Math.max(3,Math.round((x.baseRetail??x.retail)*.12))}
 const patrons=[
  {name:'Dot',taste:'Supper club',early:[3,18,20,19,46,47],late:[18,34,70],special:'Dinner party, guests sold separately'},
  {name:'Gus',taste:'Record collector',early:[9,10,11,54,55,56],late:[54,72,73],special:'Midnight listening party'},
@@ -131,9 +131,10 @@ function paintDistrict(){
  if(!broken.length)appendText(bench,'small','Look for as-is items in the shop. Their reviews reveal the fault.');
  for(const x of broken){const el=appendText(bench,'article','');appendText(el,'strong',itemName(x));appendText(el,'small',workshop[x.id][0]+' · As-is offer $'+resale(x).value+' · Restored offer $'+resale({...x,fault:false,restored:true}).value);
  action(el,x.parts?'Resume repair':'Fit '+workshop[x.id][2]+' · $'+partsCost(x),()=>repair(x))}
- wishlistUI();trophyUI();paintNeighborhood();paintCraft();
+ wishlistUI();trophyUI();paintNeighborhood();paintCraft();paintColors();
 }
 function setupDistrict(){
+ $('closeColors').onclick=()=>$('colorDialog').close();
  $('craftClose').onclick=()=>$('craftDialog').close();
  rows.slice(0,craftStart).forEach((r,i)=>$('wishProduct').add(new Option(r[1],i)));dyeNames.forEach((n,i)=>$('wishColor').add(new Option(n,i)));grades.forEach((n,i)=>$('wishGrade').add(new Option(n+' or better',i)));
  $('pinWish').onclick=addWish;$('bid').onclick=bid;$('takeLocker').onclick=openLocker;
