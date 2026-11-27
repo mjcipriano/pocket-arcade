@@ -57,7 +57,7 @@ function resale(x,now=Date.now()){
  return {value:base,label:'Everyday resale · stable offer.'}
 }
 function difference(paid,value){const delta=value-paid;return delta===0?'break even':'$'+Math.abs(delta)+' '+(delta>0?'profit':'loss')}
-const fresh=()=>({job:0,rewarded:[],sound:false,cash:80,spent:0,tier:0,bag:[],sets:[],start:Date.now(),delivery:0,seed:Math.floor(Math.random()*4294967296),advanced:false,shifts:0,sort:'packed',order:0,ready:false,guestReady:null,guestClaimed:null,club:null});
+const fresh=()=>({job:0,rewarded:[],sound:false,cash:80,spent:0,tier:0,bag:[],sets:[],start:Date.now(),delivery:0,seed:Math.floor(Math.random()*4294967296),advanced:false,shifts:0,sort:'packed',order:0,ready:false,guestReady:null,guestClaimed:null,guestHistory:[],buyerReceipt:null,club:null});
 let state=fresh();
 try{const s=JSON.parse(localStorage.getItem(key));if(s&&Array.isArray(s.bag)&&tiers[s.tier])Object.assign(state,s)}catch{}
 for(const item of state.bag){
@@ -120,16 +120,64 @@ function orderSet(){
  const needs=[0,1,2].map((j)=>{const id=(start+j*17)%originalCount;return {id,color:lot(id,state.order,state.seed^849).color}});
  return {name:'Buyer’s request #'+(state.order+1),needs,bonus:120+needs.reduce((sum,r)=>sum+rows[r.id][2],0)};
 }
-function owns(r){return state.bag.some(x=>x.id===r.id&&(r.color==null||x.color===r.color)&&heldGrade(x)>=(r.min??0))}
-function unlock(){let added=0;albums.forEach((a,i)=>{if(state.rewarded.length>=(a.requires||0)&&!state.sets.includes(i)&&a.needs.every(owns)){state.sets.push(i);added++}});if(!state.ready&&orderSet().needs.every(owns)){state.ready=true;added++}const slot=boardSlot();if(state.rewarded.length>=2&&state.guestReady==null&&state.guestClaimed!==slot&&guestSet(slot).needs.every(owns)){state.guestReady=slot;added++}return added}
+function matches(x,r){return x.id===r.id&&(r.color==null||x.color===r.color)&&heldGrade(x)>=(r.min??0)}
+function owns(r){return state.bag.some(x=>matches(x,r))}
+function piecesFor(a){
+ const selected=[];
+ for(const r of a.needs){
+  const piece=state.bag.find(x=>!selected.includes(x)&&matches(x,r));
+  if(!piece)return null;
+  selected.push(piece);
+ }
+ return selected;
+}
+function unpack(pieces){const sold=new Set(pieces);state.bag=state.bag.filter(x=>!sold.has(x))}
+function bundleQuote(pieces){
+ const now=Date.now(),brokerUses=Math.min(pieces.length,state.club.broker);
+ const individual=pieces.map((x,i)=>Math.floor(resale(x,now).value*(i<brokerUses?1.5:1)));
+ const subtotal=individual.reduce((sum,n)=>sum+n,0),bonus=Math.ceil(subtotal*.25);
+ return {total:subtotal+bonus,bonus,individual,brokerUses,paid:pieces.reduce((sum,x)=>sum+x.paid,0)};
+}
+function previewBundle(a){
+ const pieces=piecesFor(a);if(!pieces)return;
+ const q=bundleQuote(pieces);$('bundleTitle').textContent=a.name;
+ $('bundleList').replaceChildren(...pieces.map((x,i)=>{const li=document.createElement('li');
+ li.textContent=itemName(x)+(x.edition?' · delivery '+x.edition:'')+' · paid $'+x.paid+' · offer $'+q.individual[i];return li}));
+ $('bundleInfo').textContent='Paid $'+q.paid+' in total · Set bonus +$'+q.bonus+' (25%) · '+difference(q.paid,q.total)+(q.brokerUses?' · Private buyer uses: '+q.brokerUses:'');
+ $('bundleSell').textContent='Sell '+pieces.length+' items for $'+q.total;
+ $('bundleSell').onclick=()=>{
+  if(!$('bundleDialog').open||!pieces.every(x=>state.bag.includes(x)))return;
+  $('bundleDialog').close();unpack(pieces);state.club.broker-=q.brokerUses;state.cash+=q.total;save();render();chime('sell');
+  notice(a.name+' sold for $'+q.total+' including $'+q.bonus+' set bonus · You paid $'+q.paid+' · '+difference(q.paid,q.total)+'.');
+ };$('bundleDialog').showModal();
+}
+$('bundleKeep').onclick=()=>$('bundleDialog').close();
+function fulfillOrders(){
+ let filled=0;
+ while(true){
+  const a=orderSet(),pieces=piecesFor(a);if(!pieces&&!state.ready)break;
+  // Older saves can have a locked-in reward after the matching pieces were sold.
+  const paid=pieces?pieces.reduce((sum,x)=>sum+x.paid,0):0;
+  if(pieces)unpack(pieces);
+  const cash=purse(a),points=claimPoints(-1);state.cash+=cash;earn(points);state.order++;state.ready=false;
+  state.buyerReceipt=a.name+(pieces?' sold · '+pieces.length+' items · You paid $'+paid+' · '+difference(paid,cash):' · Prior earned reward')+' · +$'+cash+' · +'+points+' pts';
+  filled++;
+ }
+ return filled;
+}
+function unlock(){let added=0;albums.forEach((a,i)=>{if(state.rewarded.length>=(a.requires||0)&&!state.sets.includes(i)&&a.needs.every(owns)){state.sets.push(i);added++}});
+ const slot=boardSlot();if(state.rewarded.length>=2&&state.guestReady==null&&state.guestClaimed!==slot&&guestSet(slot).needs.every(owns)){state.guestReady=slot;added++}
+ fulfillOrders();return added}
 function claim(i){
- const guest=i===-2,order=i===-1;
- if(guest&&state.guestReady==null)return;
- const a=guest?guestSet(state.guestReady):order?orderSet():albums[i];
- if(!guest&&(order?!state.ready:!state.sets.includes(i)||state.rewarded.includes(i)))return;
- if(guest){state.guestClaimed=state.guestReady;state.guestReady=null}else if(order){state.order++;state.ready=false}else state.rewarded.push(i);
+ if(i===-1)return;
+ const guest=i===-2;
+ if(guest?state.guestReady==null:!state.sets.includes(i)||state.rewarded.includes(i))return;
+ const a=guest?guestSet(state.guestReady):albums[i];
+ if(guest){state.guestClaimed=state.guestReady;rememberGuest(state.guestReady);state.guestReady=null}else state.rewarded.push(i);
  const cash=purse(a),points=claimPoints(i);state.cash+=cash;earn(points);unlock();save();render();chime('bonus');notice(a.name+' claimed · +$'+cash+' · +'+points+' pts','bonus');
 }
+function rememberGuest(slot){const theme=slot%rotatingThemes.length;if(!state.guestHistory.includes(theme))state.guestHistory.push(theme)}
+if(state.guestClaimed!=null)rememberGuest(state.guestClaimed);
 function save(){try{localStorage.setItem(key,JSON.stringify(state))}catch{}}
 const size=i=>rows[i][3]||1;
 const used=()=>state.bag.reduce((n,x)=>n+size(x.id),0);
@@ -182,7 +230,8 @@ function buy(i){if(!onShelf(i)&&!early(i)){syncClock();return notice('This relea
  if(discovery){state.club.seen.push(i);earn(2)}
  if(state.club.dealer)state.club.dealer--;
  const usedPass=early(i);if(usedPass){state.club.preview--;catalog()}
- const count=unlock();save();render();fly(i);chime(count?'bonus':'buy');
+ const priorOrder=state.order,count=unlock();save();render();fly(i);
+ if(priorOrder!==state.order){chime('bonus');notice(state.buyerReceipt+(count?' · Collection ready to claim.':''),'bonus');return}chime(count?'bonus':'buy');
  notice(itemName(item)+' packed · −$'+q.cost+(discovery?' · First find +2 pts':'')+(regular(i)>q.cost?' · Saved $'+(regular(i)-q.cost):'')+(count?' · Collection ready! Open Collections to claim.':''),count?'bonus':'purchase',true);
 }
 const cards=rows.map(([icon,name],i)=>{const el=document.createElement('article');
@@ -228,8 +277,21 @@ function render(){$('clubOpen').textContent='★ '+state.club.points;$('clubOpen
  function entry(a,i){const el=document.createElement('article'),done=i===-2?state.guestReady!=null:i===-1?state.ready:state.sets.includes(i),paid=i>=0&&state.rewarded.includes(i);
  const heading=document.createElement('h3');heading.textContent=a.name;el.append(heading);
  for(const r of a.needs){const button=document.createElement('button');button.className='piece';button.textContent=(owns(r)?'✓ ':'⌕ ')+(r.color==null?'':dyeNames[r.color]+' ')+rows[r.id][1]+(r.min?' · Rare or better':'');button.onclick=()=>{$('search').value=rows[r.id][1];$('department').value='';catalog();tab(false)};el.append(button)}
- const footer=document.createElement(done&&!paid?'button':'small');footer.textContent=paid?'✓ Claimed · $'+a.bonus:done?'Claim $'+purse(a)+' + '+claimPoints(i)+' pts':a.needs.filter(owns).length+'/3 held · $'+purse(a)+' + '+claimPoints(i)+' pts';if(done&&!paid){footer.className='buy';footer.onclick=()=>claim(i)}el.append(footer);return el}
+ const footer=document.createElement(done&&!paid?'button':'small');footer.textContent=paid?'✓ Claimed · $'+a.bonus:done?'Claim $'+purse(a)+' + '+claimPoints(i)+' pts':a.needs.filter(owns).length+'/3 held · $'+purse(a)+' + '+claimPoints(i)+' pts';if(done&&!paid){footer.className='buy';footer.onclick=()=>claim(i)}el.append(footer);
+ if(i===-1)footer.textContent=a.needs.filter(owns).length+'/3 held · Auto-sell for $'+purse(a)+' + '+claimPoints(i)+' pts';
+ return el}
  $('commission').replaceChildren(entry(orderSet(),-1));
+ $('buyerReceipt').textContent=state.buyerReceipt||'The buyer takes one of each requested item as soon as all three are in storage.';
+ const completed=[...state.sets.map(i=>albums[i]),...state.guestHistory.map(theme=>guestSet(theme))];
+ if(state.guestReady!=null&&!state.guestHistory.includes(state.guestReady%rotatingThemes.length))completed.push(guestSet(state.guestReady));
+ $('completedLabel').textContent='Completed collections ('+completed.length+')';
+ $('completedList').replaceChildren(...completed.map(a=>{
+  const el=document.createElement('article'),h=document.createElement('h3'),detail=document.createElement('small'),b=document.createElement('button');
+  h.textContent=a.name;const pieces=piecesFor(a);detail.textContent=a.needs.map(r=>(owns(r)?'✓ ':'')+(r.color==null?'':dyeNames[r.color]+' ')+rows[r.id][1]+(r.min?' (Rare+)':'')).join(' · ');
+  b.disabled=!pieces;b.textContent=pieces?'Review bundle sale · +25%':a.needs.filter(owns).length+'/'+a.needs.length+' pieces in storage';
+  b.onclick=()=>previewBundle(a);el.append(h,detail,b);return el;
+ }));
+
  const slot=boardSlot(), guest=$('guest');guest.replaceChildren();
  if(state.rewarded.length>=2){if(state.guestReady!=null||state.guestClaimed!==slot)guest.append(entry(guestSet(state.guestReady??slot),-2));
  $('boardTime').textContent=(state.guestReady!=null?'Guest reward held until claimed.':state.guestClaimed===slot?'Guest reward claimed. ':'Guest collection. ')+' Next rotation '+localTime((slot+1)*boardInterval)+'.';
