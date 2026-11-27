@@ -30,3 +30,7 @@ body{display:grid;grid-template-rows:auto minmax(0,1fr) auto;overflow:hidden}
 .settings-list{display:grid;gap:8px}.settings-list #sound{margin:0}
 .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
 @media(max-width:370px){#items{grid-template-columns:repeat(2,minmax(0,1fr))}#items h3{font-size:17px}}
+#releaseTime{display:block;font-weight:600;font-size:12px;color:#745323;letter-spacing:0}
+#guest article{background:#f7ecd7;border-color:#c3a368}
+#boardTime,#progress{font-size:14px;font-weight:650;color:#435747}
+#valuation{line-height:1.45;background:#edeedc;border-radius:8px;padding:10px}

@@ -90,3 +90,31 @@ const legacyProfiles=[
  ['Single-wick candle in a jar','Gives my reading corner a soft glow','The first burn takes patience'],
  ['Adjustable reading arm','I can aim the light away from the screen','The base needs some desk space']
 ];
+
+// Collector releases follow the original catalog so saved product IDs stay stable.
+const collectorReleases=[
+ ['Darkroom Cabinet','Photography',1,[
+ ['🎞️','Expired slide film',32,1,'36 exposures of reversal film','I like experimenting with the color shifts.','Results vary between rolls.'],
+ ['📷','Brass rangefinder',220,2,'Mechanical shutter and coupled focus','The focus patch is easy to align.','The brass body is quite heavy.'],
+ ['🔍','Contact sheet loupe',46,1,'Five-power glass optic','Frame details pop on the light table.','Fingerprints show on the base.']]],
+ ['Weekend Florist','Gardening',2,[
+ ['💐','Ranunculus bunch',35,1,'Ten freshly cut stems','The buds opened over several days.','They wilt without fresh water.'],
+ ['🏺','Stoneware bud vase',48,1,'Hand-thrown narrow neck','One stem stands upright.','The opening needs a small brush.'],
+ ['✂️','Florist snips',29,1,'Spring-loaded bypass blades','They cut thin stems cleanly.','Dry the hinge after rinsing.']]],
+ ['First Pressing','Audio',3,[
+ ['💽','Numbered jazz pressing',115,1,'180 g vinyl in a numbered sleeve','The liner notes tell the story of the session.','The sleeve corners mark easily.'],
+ ['🎚️','Phono preamp',120,1,'Switchable gain and ground terminal','My turntable finally plays at line level.','Check the cartridge setting first.'],
+ ['🪮','Stylus brush',18,1,'Short fibers on a handled brush','Easy to guide from back to front.','The handle is small.']]],
+ ['Tea Merchant','Kitchenware',4,[
+ ['🍵','Spring sencha tin',38,1,'First-flush leaves in a sealed tin','A short steep tastes grassy and sweet.','The fragrance fades after opening.'],
+ ['🫖','Side-handle teapot',89,2,'Glazed pot with basket strainer','The handle balances well when pouring.','The mesh takes time to rinse.'],
+ ['🥄','Bamboo tea scoop',16,1,'Carved bamboo with a curved tip','Slides neatly into the tea tin.','Keep it dry between uses.']]],
+ ['Watchmaker’s Bench','Hardware',6,[
+ ['⌚','Hand-wound dress watch',295,1,'Mechanical movement with a small seconds dial','Winding the crown is a lovely daily ritual.','It stops if left on the shelf.'],
+ ['🔎','Watchmaker eyeglass',34,1,'Lightweight ten-power loupe','Engraving looks razor sharp.','The working distance is short.'],
+ ['🧰','Spring bar tool',24,1,'Forked tip with a knurled handle','Swapping straps takes seconds.','The fine tip needs a steady hand.']]],
+ ['Cartographer’s Drawer','Stationery',8,[
+ ['🗺️','Numbered transit lithograph',135,1,'Signed print on cotton rag paper','The route colors look great under glass.','Handle the margins with clean hands.'],
+ ['📐','Brass map divider',65,1,'Friction hinge and needle points','Settings hold across repeated measurements.','The points need a case.'],
+ ['📜','Archival map tube',36,2,'Rigid tube with removable end caps','Wide enough to roll my print loosely.','It needs a long shelf.']]]
+];

@@ -14,7 +14,7 @@ const rows = [
 ['📚','Mystery novels',18,2],['🕯️','Reading candle',14],['💡','Desk lamp',36,2]
 ];
 const collections=['Ready for a Camping Trip','Coffee Break','Kitchen Garden','Radio Hour','Game Night','Art Afternoon','Sunday Supper','Beach Day','Garage Workshop','Photo Walk','Cozy Weekend','Reading Nook'];
-const tiers=[['Suitcase',6],['Closet',16,100],['Garage',40,250],['Warehouse',100,600]];
+const tiers=[['Suitcase',6],['Closet',16,100],['Garage',40,250],['Warehouse',100,600],['Freight depot',160,1800],['Distribution hall',240,4500],['Bonded vault',360,11000],['Collector’s estate',540,26000]];
 const key='pocketArcade.spending.v1', $=id=>document.getElementById(id);
 const jobs=[['Errand runner',20,0],['Shop assistant',35,70],['Shift lead',55,150],['Store manager',85,300],['Market director',130,600]];
 const departments=['Outdoor gear','Coffee','Gardening','Audio','Tabletop','Art supplies','Kitchenware','Beachwear','Hardware','Photography','Clothing','Books'];
@@ -28,23 +28,57 @@ for(const [name,pieces,bonus] of [
  ['Golden Hour',[[27,6],[21,6],[48,3]],215],['Ocean Commute',[[42,4],[43,1],[44,4]],300],
  ['Archival Audio',[[54,null,2],[56,null,2],[9,null,2]],400]
 ])albums.push({name,needs:pieces.map(([id,color,min])=>({id,color,min})),bonus});
-const fresh=()=>({job:0,rewarded:[],sound:false,cash:80,spent:0,tier:0,bag:[],sets:[],start:Date.now(),delivery:0,seed:Math.floor(Math.random()*4294967296),advanced:false,shifts:0,sort:'packed',order:0,ready:false});
+const originalCount=rows.length;
+collectorReleases.forEach(([name,dept,requires,products])=>{
+ const first=rows.length;rows.push(...products);collections.push(name);departments.push(dept);
+ albums.push({name,requires,needs:products.map((_,j)=>({id:first+j})),bonus:products.reduce((sum,r)=>sum+r[2],0)});
+});
+const fiveMinutes=300000,boardInterval=3*fiveMinutes;
+const clockSlot=(now=Date.now())=>Math.floor(now/fiveMinutes);
+const boardSlot=(now=Date.now())=>Math.floor(now/boardInterval);
+const localTime=t=>new Date(t).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'});
+function rareOffset(id){return (id-originalCount)%3}
+function onShelf(id,slot=clockSlot()){return id<originalCount||rareOffset(id)===slot%3}
+function nextOpening(id,slot=clockSlot()){return (slot+(rareOffset(id)-slot%3+3)%3)*fiveMinutes}
+const rotatingThemes=[
+ ['Sunday listening session',[54,56,72]],['Garden party',[69,70,8]],['Tea tasting',[75,76,3]],
+ ['Street photography',[67,29,27]],['Repair café',[78,80,24]],['Map room',[81,82,35]]
+];
+function guestSet(slot){const [name,ids]=rotatingThemes[slot%rotatingThemes.length];return {name,needs:ids.map(id=>({id})),bonus:150+ids.reduce((n,id)=>n+rows[id][2],0)}}
+const fading=new Set([4,7,29,34,66,69,75]);
+const collectible=new Set([27,54,67,72,78,81]);
+function vintage(x,now=Date.now()){return !fading.has(x.id)&&(collectible.has(x.id)||x.grade===3)&&now-x.boughtAt>=5400000}
+function heldGrade(x){return Math.max(x.grade??0,vintage(x)?2:0)}
+function resale(x,now=Date.now()){
+ const age=Math.max(0,now-x.boughtAt),base=Math.floor(x.paid/2);
+ if(fading.has(x.id)){const steps=Math.min(8,Math.floor(age/600000));return {value:Math.floor(base*(10-steps)/10),label:'Perishable · offer falls every 10 min, down to 20% of the opening offer.'}}
+ if(collectible.has(x.id)||x.grade===3){const steps=Math.min(12,Math.floor(age/900000));return {value:Math.floor(x.paid*(5+steps)/10),label:(steps>=6?'Vintage · ':'Collector piece · ')+'offer rises every 15 min, up to 170% of what you paid.'}}
+ return {value:base,label:'Everyday resale · stable offer.'}
+}
+function difference(paid,value){const delta=value-paid;return delta===0?'break even':'$'+Math.abs(delta)+' '+(delta>0?'profit':'loss')}
+const fresh=()=>({job:0,rewarded:[],sound:false,cash:80,spent:0,tier:0,bag:[],sets:[],start:Date.now(),delivery:0,seed:Math.floor(Math.random()*4294967296),advanced:false,shifts:0,sort:'packed',order:0,ready:false,guestReady:null,guestClaimed:null});
 let state=fresh();
 try{const s=JSON.parse(localStorage.getItem(key));if(s&&Array.isArray(s.bag)&&tiers[s.tier])Object.assign(state,s)}catch{}
-const variant=id=>lot(id,state.delivery,state.seed);
+for(const item of state.bag)if(!Number.isFinite(item.boughtAt))item.boughtAt=Date.now();
+const variant=id=>{const v=lot(id,state.delivery,state.seed);if(id>=originalCount)v.grade=Math.max(2,v.grade);return v};
+let lastSlot=clockSlot();
+function syncClock(){const slot=clockSlot();if(slot===lastSlot)return;lastSlot=slot;unlock();save();catalog();render()}
+
 const regular=id=>Math.round(rows[id][2]*[1,1.15,1.45,2][variant(id).grade]);
 const itemName=x=>(x.color==null?'Original':dyeNames[x.color])+' '+rows[x.id][1];
 function orderSet(){
  const start=lot(0,state.order,state.seed).color+state.order*7;
- const needs=[0,1,2].map((j)=>{const id=(start+j*17)%rows.length;return {id,color:lot(id,state.order,state.seed^849).color}});
+ const needs=[0,1,2].map((j)=>{const id=(start+j*17)%originalCount;return {id,color:lot(id,state.order,state.seed^849).color}});
  return {name:'Buyer’s request #'+(state.order+1),needs,bonus:120+needs.reduce((sum,r)=>sum+rows[r.id][2],0)};
 }
-function owns(r){return state.bag.some(x=>x.id===r.id&&(r.color==null||x.color===r.color)&&(x.grade??0)>=(r.min??0))}
-function unlock(){let added=0;albums.forEach((a,i)=>{if(!state.sets.includes(i)&&a.needs.every(owns)){state.sets.push(i);added++}});if(!state.ready&&orderSet().needs.every(owns)){state.ready=true;added++}return added}
+function owns(r){return state.bag.some(x=>x.id===r.id&&(r.color==null||x.color===r.color)&&heldGrade(x)>=(r.min??0))}
+function unlock(){let added=0;albums.forEach((a,i)=>{if(state.rewarded.length>=(a.requires||0)&&!state.sets.includes(i)&&a.needs.every(owns)){state.sets.push(i);added++}});if(!state.ready&&orderSet().needs.every(owns)){state.ready=true;added++}const slot=boardSlot();if(state.rewarded.length>=2&&state.guestReady==null&&state.guestClaimed!==slot&&guestSet(slot).needs.every(owns)){state.guestReady=slot;added++}return added}
 function claim(i){
- const order=i===-1,a=order?orderSet():albums[i];
- if(order?!state.ready:!state.sets.includes(i)||state.rewarded.includes(i))return;
- if(order){state.order++;state.ready=false}else state.rewarded.push(i);
+ const guest=i===-2,order=i===-1;
+ if(guest&&state.guestReady==null)return;
+ const a=guest?guestSet(state.guestReady):order?orderSet():albums[i];
+ if(!guest&&(order?!state.ready:!state.sets.includes(i)||state.rewarded.includes(i)))return;
+ if(guest){state.guestClaimed=state.guestReady;state.guestReady=null}else if(order){state.order++;state.ready=false}else state.rewarded.push(i);
  state.cash+=a.bonus;unlock();save();render();chime('bonus');notice(a.name+' claimed · +$'+a.bonus,'bonus');
 }
 function save(){try{localStorage.setItem(key,JSON.stringify(state))}catch{}}
@@ -89,11 +123,11 @@ function fly(i){
  const anim=ghost.animate([{transform:'scale(1)'},{transform:'translate('+ (b.left+b.width/2-x)+'px,'+(b.top-y)+'px) scale(.35)',opacity:.2}],{duration:540,easing:'ease-in'});
  anim.onfinish=()=>ghost.remove();anim.oncancel=()=>ghost.remove();
 }
-function buy(i){const q=quote(i,Date.now());
+function buy(i){if(!onShelf(i)){syncClock();return notice('This release returns at '+localTime(nextOpening(i))+'.')}const q=quote(i,Date.now());
  if(q.cost!==Number(cards[i].button.dataset.price)){prices();return notice('Price changed. Check the new price before buying.')}
  if(used()+size(i)>tiers[state.tier][1])return notice('Needs '+size(i)+' slots. Sell an item or upgrade storage.','error',true);
  if(q.cost>state.cash)return notice('Earn $'+(q.cost-state.cash)+' more to buy this item.','error');
- const item={id:i,paid:q.cost,...variant(i)};state.cash-=q.cost;state.spent+=q.cost;state.bag.push(item);
+ const item={id:i,paid:q.cost,boughtAt:Date.now(),...variant(i)};state.cash-=q.cost;state.spent+=q.cost;state.bag.push(item);
  const count=unlock();save();render();fly(i);chime(count?'bonus':'buy');
  notice(itemName(item)+' packed · −$'+q.cost+(q.seconds?' · Saved $'+(regular(i)-q.cost):'')+(count?' · Collection ready! Open Collections to claim.':''),count?'bonus':'purchase',true);
 }
@@ -105,19 +139,20 @@ function prices(){const now=Date.now();cards.forEach(({button,label,el},i)=>{if(
  label.className=q.seconds?'sale':'';label.textContent=q.seconds?'Was $'+regular(i)+' · '+q.seconds+'s left':'Regular price'})}
 function catalog(){let found=0;const term=$('search').value.trim().toLowerCase();
  cards.forEach(({el,badge},id)=>{const v=variant(id),dept=departments[group(id)];
- badge.textContent=dyeNames[v.color]+' · '+grades[v.grade];el.style.setProperty('--ink',inks[v.color]);
- el.hidden=Boolean(($('department').value&&$('department').value!==dept)||![rows[id][1],collections[group(id)],badge.textContent,dept].join(' ').toLowerCase().includes(term));if(!el.hidden)found++});
- $('empty').hidden=found>0;$('batch').textContent='Delivery '+(state.delivery+1)+' · '+found+' finds';prices()}
+ badge.textContent=dyeNames[v.color]+' · '+grades[v.grade]+(id>=originalCount?' · Timed release':'');el.style.setProperty('--ink',inks[v.color]);
+ el.hidden=Boolean(!onShelf(id)||($('department').value==='timed'?id<originalCount:$('department').value&&$('department').value!==dept)||![rows[id][1],collections[group(id)],badge.textContent,dept].join(' ').toLowerCase().includes(term));if(!el.hidden)found++});
+ $('empty').hidden=found>0;$('batch').textContent='Delivery '+(state.delivery+1)+' · '+found+' finds';$('releaseTime').textContent='Rare shelf changes at '+localTime((clockSlot()+1)*fiveMinutes);
+ if(!found&&term){const missing=rows.findIndex((r,i)=>r[1].toLowerCase()===term&&!onShelf(i));$('empty').textContent=missing<0?'No finds match these filters.':rows[missing][1]+' returns at '+localTime(nextOpening(missing))+'.'}else $('empty').textContent='No finds match these filters.';prices()}
 for(const dept of [...new Set(departments)].sort())$('department').add(new Option(dept,dept));
 $('search').oninput=catalog;$('department').onchange=catalog;
 $('delivery').onclick=()=>{state.delivery++;save();catalog();chime('pack');motion($('items'),[{opacity:.4},{opacity:1}],300)};
 function review(id){
  const [spec,positive,caveat]=id<36?legacyProfiles[id]:rows[id].slice(4);let page=0;
  function paint(){const entry=[[5,positive,'Mira'],[4,caveat,'Jules']][page];$('stars').textContent='★'.repeat(entry[0])+'☆'.repeat(5-entry[0]);$('reviewText').textContent=entry[1];$('reviewBy').textContent=entry[2]+' · Review '+(page+1)+' of 2'}
- $('reviewTitle').textContent=rows[id][1];$('spec').textContent=spec;
+ $('reviewTitle').textContent=rows[id][1];$('spec').textContent=spec+'. '+resale({id,grade:variant(id).grade,paid:regular(id),boughtAt:Date.now()}).label;
  $('prev').onclick=$('next').onclick=()=>{page=1-page;paint()};paint();$('reviews').showModal()}
 $('reviewClose').onclick=()=>$('reviews').close();
-function discard(index,sell){const x=state.bag[index],value=sell?Math.floor(x.paid/2):0;state.bag.splice(index,1);state.cash+=value;save();render();notice(sell?'Sold '+rows[x.id][1]+' for $'+value+'.':'Tossed '+rows[x.id][1]+'.')}
+function discard(index,sell,offer){const x=state.bag[index],value=sell?(offer??resale(x).value):0;state.bag.splice(index,1);state.cash+=value;save();render();notice(sell?'Sold '+itemName(x)+' for $'+value+' · You paid $'+x.paid+' · '+difference(x.paid,value)+'.':'Tossed '+rows[x.id][1]+'.')}
 function render(){const [tier,cap]=tiers[state.tier];$('wallet').textContent='$'+state.cash;$('score').textContent='$'+state.spent;$('space').textContent=tier+' '+used()+'/'+cap;
  $('tier').textContent='Your '+tier.toLowerCase();const next=tiers[state.tier+1];$('upgrade').replaceChildren();
  if(next){const b=document.createElement('button');b.textContent='Upgrade to '+next[0]+' · '+next[1]+' slots · $'+next[2];b.onclick=()=>{if(state.cash<next[2])return notice('Earn $'+(next[2]-state.cash)+' more to upgrade.');state.cash-=next[2];state.spent+=next[2];state.tier++;save();render();chime('upgrade');notice('Moved into the '+next[0].toLowerCase()+'!')};$('upgrade').append(b)}
@@ -125,32 +160,39 @@ function render(){const [tier,cap]=tiers[state.tier];$('wallet').textContent='$'
  $('stock').replaceChildren();
  const sorted=state.bag.map((item,index)=>({item,index}));
  const sortKey=x=>state.sort==='collection'?collections[group(x.id)]:state.sort==='type'?departments[group(x.id)]:'';
- if(state.sort!=='packed')sorted.sort(({item:a},{item:b})=>(state.sort==='rarity'?((b.grade??0)-(a.grade??0)):sortKey(a).localeCompare(sortKey(b)))||rows[a.id][1].localeCompare(rows[b.id][1])||itemName(a).localeCompare(itemName(b)));
+ if(state.sort!=='packed')sorted.sort(({item:a},{item:b})=>(state.sort==='rarity'?(heldGrade(b)-heldGrade(a)):sortKey(a).localeCompare(sortKey(b)))||rows[a.id][1].localeCompare(rows[b.id][1])||itemName(a).localeCompare(itemName(b)));
  $('sort').value=state.sort;
  sorted.forEach(({item,index})=>{
    const [icon,name]=rows[item.id],tile=document.createElement('button');
    tile.className='packed';tile.style.gridColumn='span '+size(item.id);
    tile.innerHTML='<span aria-hidden="true">'+icon+'</span><small>'+name+'</small>';
-   tile.style.borderBottom='5px solid '+(inks[item.color]||'#917959');tile.lastElementChild.textContent=itemName(item);tile.setAttribute('aria-label','Inspect '+itemName(item));tile.onclick=()=>inspect(index);$('stock').append(tile);
+   tile.style.borderBottom='5px solid '+(inks[item.color]||'#917959');tile.lastElementChild.textContent=(vintage(item)?'Vintage · ':'')+itemName(item);tile.setAttribute('aria-label','Inspect '+itemName(item));tile.onclick=()=>inspect(index);$('stock').append(tile);
  });
- for(let n=used();n<cap;n++){
+ for(let n=used();n<Math.min(cap,used()+24);n++){
    const slot=document.createElement('div');slot.className='vacant';slot.setAttribute('aria-hidden','true');$('stock').append(slot);
  }
- function entry(a,i){const el=document.createElement('article'),done=i===-1?state.ready:state.sets.includes(i),paid=i>=0&&state.rewarded.includes(i);
+ function entry(a,i){const el=document.createElement('article'),done=i===-2?state.guestReady!=null:i===-1?state.ready:state.sets.includes(i),paid=i>=0&&state.rewarded.includes(i);
  const heading=document.createElement('h3');heading.textContent=a.name;el.append(heading);
  for(const r of a.needs){const button=document.createElement('button');button.className='piece';button.textContent=(owns(r)?'✓ ':'⌕ ')+(r.color==null?'':dyeNames[r.color]+' ')+rows[r.id][1]+(r.min?' · Rare or better':'');button.onclick=()=>{$('search').value=rows[r.id][1];$('department').value='';catalog();tab(false)};el.append(button)}
  const footer=document.createElement(done&&!paid?'button':'small');footer.textContent=paid?'✓ Claimed · $'+a.bonus:done?'Claim $'+a.bonus:a.needs.filter(owns).length+'/3 held · Reward $'+a.bonus;if(done&&!paid){footer.className='buy';footer.onclick=()=>claim(i)}el.append(footer);return el}
  $('commission').replaceChildren(entry(orderSet(),-1));
- $('sets').replaceChildren(...albums.map((a,i)=>({a,i})).sort((x,y)=>Number(state.sets.includes(y.i)&&!state.rewarded.includes(y.i))-Number(state.sets.includes(x.i)&&!state.rewarded.includes(x.i))).map(({a,i})=>entry(a,i)));
- const pending=state.sets.filter(i=>!state.rewarded.includes(i)).length+Number(state.ready);
+ const slot=boardSlot(), guest=$('guest');guest.replaceChildren();
+ if(state.rewarded.length>=2){if(state.guestReady!=null||state.guestClaimed!==slot)guest.append(entry(guestSet(state.guestReady??slot),-2));
+ $('boardTime').textContent=(state.guestReady!=null?'Guest reward held until claimed.':state.guestClaimed===slot?'Guest reward claimed. ':'Guest collection. ')+' Next rotation '+localTime((slot+1)*boardInterval)+'.';
+ }else $('boardTime').textContent='Claim 2 permanent sets to open the rotating guest collection.';
+ const locked=albums.filter(a=>(a.requires||0)>state.rewarded.length);
+ $('progress').textContent=state.rewarded.length+' claimed'+(locked.length?' · Next: '+locked[0].name+' at '+locked[0].requires+' claimed.':' · All permanent collections unlocked.');
+ $('sets').replaceChildren(...albums.map((a,i)=>({a,i})).filter(({a,i})=>!state.rewarded.includes(i)&&(a.requires||0)<=state.rewarded.length).sort((x,y)=>Number(state.sets.includes(y.i)&&!state.rewarded.includes(y.i))-Number(state.sets.includes(x.i)&&!state.rewarded.includes(x.i))).map(({a,i})=>entry(a,i)));
+ const pending=Number(state.guestReady!=null)+state.sets.filter(i=>!state.rewarded.includes(i)).length+Number(state.ready);
  $('book').textContent='Collections'+(pending?' ('+pending+')':'');$('mode').textContent='Mode: '+(state.advanced?'Advanced':'Casual');$('mode').setAttribute('aria-pressed',state.advanced);
  $('work').textContent=(state.advanced?'Play shift':'Work')+' +$'+paycheck();$('sound').textContent=state.sound?'Sound on':'Sound off';$('sound').setAttribute('aria-pressed',state.sound);prices()}
 function inspect(index){
  const item=state.bag[index],[icon,name]=rows[item.id];$('detailIcon').textContent=icon;$('itemTitle').textContent=itemName(item);
- $('itemInfo').textContent=(item.edition?grades[item.grade]+' · Delivery '+item.edition:'Original issue')+' · Paid $'+item.paid+' · '+size(item.id)+' storage slot'+(size(item.id)>1?'s':'');
- $('sellItem').textContent='Sell · $'+Math.floor(item.paid/2);
+ $('itemInfo').textContent=(item.edition?grades[item.grade]+' · Delivery '+item.edition:'Original issue')+(vintage(item)?' · Vintage / '+grades[heldGrade(item)]:'')+' · Paid $'+item.paid+' · '+size(item.id)+' storage slot'+(size(item.id)>1?'s':'');
+ const offer=resale(item);$('valuation').textContent=offer.label+' Current offer $'+offer.value+' · '+difference(item.paid,offer.value)+'.';
+ $('sellItem').textContent='Sell for $'+offer.value;
  for(const [id,sell] of [['sellItem',true],['tossItem',false]]){
-   $(id).onclick=()=>{$('itemDialog').close();discard(index,sell);chime(sell?'sell':'pack')};
+   $(id).onclick=()=>{$('itemDialog').close();discard(index,sell,offer.value);chime(sell?'sell':'pack')};
  }
  $('itemDialog').showModal();chime('pack');
 }
@@ -200,4 +242,4 @@ function shift(){
  panel.showModal()}
 $('leave').onclick=()=>$('shift').close();$('work').onclick=()=>state.advanced?shift():pay();
 $('restart').onclick=()=>$('confirm').showModal();$('cancel').onclick=()=>$('confirm').close();$('reset').onclick=()=>{state=fresh();$('search').value='';$('department').value='';catalog();save();render();tab(false);notice('Fresh start!');$('confirm').close()};
-unlock();save();catalog();tab(false);render();setInterval(prices,500);
+unlock();save();catalog();tab(false);render();setInterval(()=>{if(lastSlot!==clockSlot())syncClock();else if(!$('store').hidden)prices()},500);
