@@ -55,6 +55,21 @@ export function animateField(canvas,kind,targets,color,duration,paths=[]){
         const x=w*.5,y=h*.5;
         ctx.beginPath();ctx.ellipse(x,y,w*.21,h*(.04+.12*Math.sin(Math.PI*t)),0,0,2*Math.PI);ctx.stroke();
         ring(x,y,h*.1);ring(x,y,h*(.1+.38*t));
+      }else if(kind==='bloom'){
+        for(const pos of targets){
+          const [x,y]=point(pos);
+          for(let j=0;j<6;j++){
+            const angle=j*Math.PI/3+t*.35;
+            ctx.save();ctx.translate(x,y);ctx.rotate(angle);
+            ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(-4,-8*t);ctx.lineTo(0,-26*t);ctx.lineTo(4,-8*t);ctx.closePath();ctx.stroke();ctx.restore();
+          }
+        }
+        ring(w*.5,h*.5,t*w*.6);
+      }else if(kind==='pulsar'){
+        for(const x of [w*.15,w*.85])for(let j=0;j<3;j++)ring(x,h*.5,2+((t+j/3)%1)*w*.4);
+        for(let i=0;i<targets.length;i+=2){
+          const [x,y]=point(targets[i]),[end]=point(targets[i+1]);stroke(x,y,x+(end-x)*t,y);
+        }
       }else if(kind==='line'){
         for(const path of paths){
           const points=path.map(point);ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(...points[0]);

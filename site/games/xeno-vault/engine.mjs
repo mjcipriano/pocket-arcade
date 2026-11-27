@@ -1,4 +1,5 @@
 import {sectorEvent,phenomena} from './sector.mjs';
+import {startRelay} from './relay.mjs';
 export const species=['Oracle','Warden','Salvager'];
 export const names=['Oracle','Warden','Salvager','Moon','Crystal','Beacon','Wild','Portal'];
 export const pays=[[6,15,50],[5,12,40],[4,10,35],[3,8,22],[3,7,20],[2,6,18]];
@@ -23,7 +24,7 @@ export function score(board,bet,factor=1){
   return hits;
 }
 export function spin(s,rng=Math.random){
-  if(s.bonus || s.pods || (!s.free && s.credits<s.bet)) return false;
+  if(s.relay || s.bonus || s.pods || (!s.free && s.credits<s.bet)) return false;
   const free=s.free>0, mode=free?s.mode:'';
   if(free) s.free--; else {s.credits-=s.bet;s.vault+=s.bet/5;}
   s.board=Array.from({length:5},()=>Array.from({length:3},()=>pick(bag,rng)));
@@ -42,10 +43,31 @@ export function spin(s,rng=Math.random){
   const portals=s.board.flat().filter(id=>id===7).length;
   const jackpot=portals>=4;
   if(jackpot){s.last+=s.vault;s.vault=250;}
+  // Portals and the contact meter resolve once, on the initial landing.
+  // Bonus flights retain their own board rules, including Warden's locked wilds.
+  s.drops=[];
+  if(!free){
+    let board=s.board,hits=s.hits;
+    for(let level=2;hits.length && level<=3;level++){
+      const removed=new Set();
+      for(const hit of hits)for(let c=0;c<hit.count;c++)removed.add(c*3+lines[hit.line][c]);
+      board=board.map((col,c)=>{
+        const kept=col.filter((_,r)=>!removed.has(c*3+r));
+        const fresh=Array.from({length:3-kept.length},()=>Math.floor(rng()*6));
+        return [...fresh,...kept];
+      });
+      hits=score(board,s.bet,level*(s.event?.factor??1));
+      const amount=hits.reduce((sum,h)=>sum+h.amount,0);
+      s.drops.push({board,hits,removed:[...removed],level,amount});
+      s.last+=amount;
+    }
+    if(s.sectorStep%9===3)s.relay=startRelay(s.bet);
+  }
   s.credits+=s.last;s.best=Math.max(s.best,s.last);
   if(!free){s.charge++;if(portals>=3 || s.charge>=8){s.charge=0;s.bonus=true;}}
+  const chainWin=s.drops.reduce((sum,drop)=>sum+drop.amount,0);
   const details=s.hits.map(h=>'L'+(h.line+1)+' +'+h.amount).join(' · ');
-  s.message=[s.event?phenomena[s.event.kind].name:'',jackpot?'Vault opened!':'',mode==='Oracle'?'Oracle ×'+factor:'',s.last?'Won '+s.last+' credits':'No line win',details].filter(Boolean).join(' · ');
+  s.message=[s.event?phenomena[s.event.kind].name:'',jackpot?'Vault opened!':'',mode==='Oracle'?'Oracle ×'+factor:'',s.last?'Won '+s.last+' credits':'No line win',details,chainWin?'Gravity chain +'+chainWin:''].filter(Boolean).join(' · ');
   if(!s.free){s.mode='';s.locked=[];}
   return true;
 }
