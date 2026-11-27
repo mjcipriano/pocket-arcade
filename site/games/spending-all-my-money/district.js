@@ -45,7 +45,7 @@ function wishlistUI(){
  $('shop').textContent=hits.length?'Shop ★':'Shop';
  const box=$('wishList');box.replaceChildren();
  for(const w of state.wishes){const row=appendText(box,'div','');row.className='townrow';
- appendText(row,'span',(w.color==null?'Any color':dyeNames[w.color])+' '+rows[w.id][1]+' · '+grades[w.min]+'+');
+ appendText(row,'span',rows[w.id][1]+' · '+(w.color==null?'Any color':colorDescription(w.id,w.color))+' · '+grades[w.min]+'+');
  if(wishMatch(w))action(row,'Shop match',()=>jumpTo(w.id));
  action(row,'Remove',()=>{state.wishes=state.wishes.filter(x=>x!==w);save();wishlistUI()})}
  $('pinWish').disabled=state.wishes.length>=5;

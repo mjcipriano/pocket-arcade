@@ -68,9 +68,14 @@ function need(r){
  const p=identity(r.id),dept=trades[p.job][1],item=dept*3+(r.cycle+neighborRoll(r.id,21,3))%3;
  return {item,p,dept};
 }
+function requestNoun(id){
+ const phrases={4:'a bag of coffee beans',6:'a pair of garden gloves',9:'a pair of headphones',13:'a deck of playing cards',16:'a set of watercolors',20:'a set of wooden spoons',21:'a pair of sunglasses',23:'a pair of flip-flops',29:'a roll of film',32:'a pair of lucky socks',33:'a pair of mystery novels'};
+ return phrases[id]||'a '+rows[id][1].toLowerCase();
+}
 function requestLine(r){
  const {item,p}=need(r),job=trades[p.job],product=rows[item][1].toLowerCase(),why=job[2+neighborRoll(r.id,r.cycle+123,2)];
- const lines=['Any chance you have a '+product+'? '+why+'.','A '+product+' would save my afternoon. '+why+'.','I borrowed a '+product+'. Long story. I need one of my own because '+why+'.','Please tell me you packed a '+product+' today. '+why+'.','I put “'+product+'” on my list and then lost the list. '+why+'.','I can pay a rush price for a '+product+' today. '+why+'.'];
+ const phrase=requestNoun(item);
+ const lines=['Any chance you have '+phrase+'? I’m asking because '+why+'.','I could use '+phrase+' today because '+why+'.','I put off buying '+phrase+'. Bad timing, because '+why+'.','Please tell me you packed '+phrase+' today. I ask because '+why+'.','I put “'+product+'” on my list and then lost the list. The trouble is, '+why+'.','I can pay a rush price for '+phrase+' today because '+why+'.'];
  return lines[neighborRoll(r.id,35+r.cycle,lines.length)];
 }
 function deal(r,x,disclose=true){
@@ -94,7 +99,7 @@ function chatNeighbor(r){
 }
 function promiseNeighbor(r,cycle){
  if(!state.village.people.includes(r)||r.cycle!==cycle||r.sold||r.promised)return;
- r.promised=true;remember(r,'You promised to bring a '+rows[need(r).item][1].toLowerCase(),0);save();paintNeighborhood();
+ r.promised=true;remember(r,'You promised to bring '+requestNoun(need(r).item),0);save();paintNeighborhood();
 }
 function portrait(id){
  const canvas=document.createElement('canvas');canvas.width=canvas.height=32;canvas.className='residentFace';canvas.setAttribute('aria-hidden','true');

@@ -2,7 +2,7 @@
 const rows = [
 ['🔦','Flashlight',16],['🪑','Folding chair',32,2],['🧊','Picnic cooler',48,2],
 ['☕','Coffee mug',12],['🫘','Coffee beans',18],['🫖','Gooseneck kettle',42,2],
-['🧤','Garden gloves',14],['🪴','Basil plant',20],['🚿','Watering can',24],
+['🧤','Garden gloves',14],['🪴','Basil plant',9],['🚿','Watering can',24],
 ['🎧','Headphones',56],['📻','Pocket radio',36],['🎙️','Microphone',44],
 ['🎲','Dice set',8],['🃏','Playing cards',10],['♟️','Chess set',28,2],
 ['🖌️','Paintbrush kit',16],['🎨','Watercolors',26],['📓','Sketchbook',12],
@@ -45,7 +45,7 @@ const rotatingThemes=[
  ['Street photography',[67,29,27]],['Repair café',[78,80,24]],['Map room',[81,82,35]]
 ];
 function guestSet(slot){const [name,ids]=rotatingThemes[slot%rotatingThemes.length];return {name,needs:ids.map(id=>({id})),bonus:150+ids.reduce((n,id)=>n+rows[id][2],0)}}
-const fading=new Set([4,7,29,34,66,69,75]);
+const fading=new Set([4,7,29,66,69,75]);
 const collectible=new Set([27,54,67,72,78,81]);
 function vintage(x,now=Date.now()){return !fading.has(x.id)&&(collectible.has(x.id)||x.grade===3)&&now-x.boughtAt>=5400000}
 function heldGrade(x){return Math.max(x.grade??0,vintage(x)?2:0)}
@@ -54,7 +54,7 @@ function ageOffer(x,now){
  const age=Math.max(0,now-x.boughtAt),retail=x.retail??retailPrice(x.id,x.grade),base=Math.floor(retail/2);
  if(fading.has(x.id)){const steps=Math.min(8,Math.floor(age/600000));return {value:Math.floor(base*(10-steps)/10),label:'Perishable · offer falls every 10 min, down to 20% of the opening offer.'}}
  if(collectible.has(x.id)||x.grade===3){const steps=Math.min(12,Math.floor(age/900000));return {value:Math.floor(retail*(5+steps)/10),label:(steps>=6?'Vintage · ':'Collector piece · ')+'offer rises every 15 min, up to 170% of full retail.'}}
- return {value:base,label:'Everyday resale · stable offer.'}
+ return {value:base,label:'Base resale is 50% of full retail.'}
 }
 function resale(x,now=Date.now()){
  const offer=ageOffer(x,now),event=eventFactor(x.id,3,now),condition=x.fault ? .4 : x.restored ? 1.3 : 1;
@@ -119,7 +119,7 @@ let lastSlot=clockSlot();
 function syncClock(){const slot=clockSlot();if(slot===lastSlot)return;lastSlot=slot;tickVillage();unlock();save();catalog();render()}
 
 const regular=id=>retailPrice(id,variant(id).grade);
-const itemName=x=>(x.color==null?'Original':dyeNames[x.color])+' '+rows[x.id][1];
+const itemName=x=>rows[x.id][1]+(x.color==null?' · Original issue':' · '+colorDescription(x.id,x.color));
 function orderSet(){
  if(state.patron!=null)return patronOrder();
  const start=lot(0,state.order,state.seed).color+state.order*7;
@@ -190,9 +190,9 @@ const used=()=>state.bag.reduce((n,x)=>n+size(x.id),0);
 function quote(i,now){const interval=45000, window=18000;
  const elapsed=Math.max(0,now-state.start);
  const phase=(elapsed+i*7919)%interval;
- const price=Math.floor(regular(i)*eventFactor(i,4,now)*(shopFault(i) ? .45 : 1));
+ const retail=regular(i),price=Math.floor(retail*eventFactor(i,4,now)*(shopFault(i) ? .45 : 1));
  const sale=phase<window,subtotal=sale?Math.floor(price*.6):price;
- return {cost:state.club.dealer?Math.floor(subtotal*.8):subtotal,seconds:sale?Math.ceil((window-phase)/1000):0}}
+ return {retail,shelf:price,cost:state.club.dealer?Math.floor(subtotal*.8):subtotal,seconds:sale?Math.ceil((window-phase)/1000):0}}
 let receiptTimer,audio;
 function chime(which){
  if(!state.sound)return;
@@ -245,12 +245,15 @@ const cards=rows.map(([icon,name],i)=>{const el=document.createElement('article'
  el.querySelector('.journal').onclick=()=>review(i);const button=el.lastElementChild;button.onclick=()=>buy(i);$('items').append(el);
  return {el,button,label:button.previousElementSibling,badge:el.querySelector('.variant'),journal:el.querySelector('.journal')}});
 function prices(){const now=Date.now();cards.forEach(({button,label,el},i)=>{if(el.hidden)return;const q=quote(i,now);button.dataset.price=q.cost;button.textContent='Buy · $'+q.cost;
- label.className=q.seconds?'sale':'';label.textContent=q.seconds?'Was $'+regular(i)+' · '+q.seconds+'s left':'Regular price';if(shopFault(i))label.textContent+=' · As-is −55%';if(eventFactor(i,4,now)<1)label.textContent+=' · Event −25%';if(state.club.dealer)label.textContent+=' · Dealer −20%'})}
+ const labels=[];if(shopFault(i))labels.push('As-is −55%');if(eventFactor(i,4,now)<1)labels.push('Event −25%');
+ if(q.seconds)labels.push('Flash sale −40% on $'+q.shelf+' · '+q.seconds+'s');
+ if(state.club.dealer)labels.push('Dealer −20%');
+ label.className=q.seconds?'sale':'';label.textContent=labels.length?'Full retail $'+q.retail+' · '+labels.join(' · '):'Full retail $'+q.retail})}
 function catalog(){let found=0;const term=$('search').value.trim().toLowerCase();
  cards.forEach((card,id)=>{const {el,badge,journal}=card;
  if(card.issue!==state.delivery){card.issue=state.delivery;card.feed=reviewJournal(id,state.delivery);if(shopFault(id)){card.feed.reviews.unshift({rating:2,body:workshop[id][1],by:'Dot · repair diary'});card.feed.average=(card.feed.reviews.reduce((n,r)=>n+r.rating,0)/card.feed.reviews.length).toFixed(1)}journal.textContent='★ '+card.feed.average+' · '+card.feed.reviews.length+' reviews'}
  const v=variant(id),dept=departments[group(id)];
- badge.textContent=dyeNames[v.color]+' · '+grades[v.grade]+(shopFault(id)?' · As-is':'')+(id>=originalCount?(early(id)?' · Backroom preview':' · Timed release'):'');el.style.setProperty('--ink',inks[v.color]);
+ badge.textContent=colorDescription(id,v.color)+' · '+grades[v.grade]+(shopFault(id)?' · As-is':'')+(id>=originalCount?(early(id)?' · Backroom preview':' · Timed release'):'');el.style.setProperty('--ink',inks[v.color]);
  el.hidden=Boolean((!onShelf(id)&&!early(id))||($('department').value==='wishlist'?!state.wishes.some(w=>w.id===id&&wishMatch(w)):$('department').value==='timed'?id<originalCount:$('department').value&&$('department').value!==dept)||![rows[id][1],collections[group(id)],badge.textContent,dept].join(' ').toLowerCase().includes(term));if(!el.hidden)found++});
  $('empty').hidden=found>0;$('batch').textContent='Delivery '+(state.delivery+1)+' · '+found+' finds';$('releaseTime').textContent='Rare shelf changes at '+localTime((clockSlot()+1)*fiveMinutes);
  if(!found&&term){const missing=rows.findIndex((r,i)=>r[1].toLowerCase()===term&&!onShelf(i));$('empty').textContent=missing<0?'No finds match these filters.':rows[missing][1]+' returns at '+localTime(nextOpening(missing))+'.'}else $('empty').textContent='No finds match these filters.';wishlistUI();$('townEvent').textContent=townEvent()[0]+' · '+townEvent()[1]+' until '+localTime((boardSlot()+1)*boardInterval);prices()}
@@ -262,7 +265,7 @@ function review(id){
  function paint(){const entry=ordered[page];$('stars').textContent='★'.repeat(entry.rating)+'☆'.repeat(5-entry.rating);$('stars').setAttribute('aria-label',entry.rating+' out of 5 stars');$('reviewText').textContent=entry.body;$('reviewBy').textContent=entry.by+' · Review '+(page+1)+' of '+ordered.length}
  $('inspectFault').hidden=!shopFault(id);$('faultReport').textContent='';$('inspectFault').onclick=()=>{$('faultReport').textContent=workshop[id][0]+' · '+workshop[id][2]+' costs $'+partsCost({retail:regular(id)})+'. Buy as-is, then repair in Town.'};
  $('wishThis').onclick=()=>{$('reviews').close();$('wishProduct').value=id;$('wishColor').value=variant(id).color;$('wishGrade').value=variant(id).grade;$('wishForm').open=true;tab('town');$('wishForm').scrollIntoView({block:'nearest'})};
- $('reviewTitle').textContent=rows[id][1];$('spec').textContent=spec+'. '+resale({id,grade:variant(id).grade,boughtAt:Date.now()}).label;
+ $('reviewTitle').textContent=rows[id][1];$('spec').textContent=spec+'. '+(shopFault(id)?'This copy is sold as-is. ':'')+resale({id,grade:variant(id).grade,fault:shopFault(id),boughtAt:Date.now()}).label;
  $('reviewMean').textContent=average+' / 5 · '+reviews.length+' shopper reviews';$('reviewOrder').value='latest';
  $('reviewOrder').onchange=()=>{const sort=$('reviewOrder').value;ordered=sort==='latest'?reviews:[...reviews].sort((a,b)=>sort==='low'?a.rating-b.rating:b.rating-a.rating);page=0;paint()};
  $('prev').onclick=()=>{page=(page+ordered.length-1)%ordered.length;paint()};$('next').onclick=()=>{page=(page+1)%ordered.length;paint()};paint();$('reviews').showModal()}
@@ -289,7 +292,7 @@ function render(){paintDistrict();$('clubOpen').textContent='★ '+state.club.po
  function entry(a,i){const el=document.createElement('article'),done=i===-2?state.guestReady!=null:i===-1?state.ready:state.sets.includes(i),paid=i>=0&&state.rewarded.includes(i);
  const heading=document.createElement('h3');heading.textContent=a.name;el.append(heading);
  const held=r=>i===-1?state.bag.some(x=>!x.trophy&&matches(x,r)):owns(r);
- for(const r of a.needs){const button=document.createElement('button');button.className='piece';button.textContent=(held(r)?'✓ ':'⌕ ')+(r.color==null?'':dyeNames[r.color]+' ')+rows[r.id][1]+(r.min?' · Rare or better':'');button.onclick=()=>{$('search').value=rows[r.id][1];$('department').value='';catalog();tab(false)};el.append(button)}
+ for(const r of a.needs){const button=document.createElement('button');button.className='piece';button.textContent=(held(r)?'✓ ':'⌕ ')+rows[r.id][1]+(r.color==null?'':' · '+colorDescription(r.id,r.color))+(r.min?' · Rare or better':'');button.onclick=()=>{$('search').value=rows[r.id][1];$('department').value='';catalog();tab(false)};el.append(button)}
  const footer=document.createElement(done&&!paid?'button':'small');footer.textContent=paid?'✓ Claimed · $'+a.bonus:done?'Claim $'+purse(a)+' + '+claimPoints(i)+' pts':a.needs.filter(owns).length+'/3 held · $'+purse(a)+' + '+claimPoints(i)+' pts';if(done&&!paid){footer.className='buy';footer.onclick=()=>claim(i)}el.append(footer);
  if(i===-1)footer.textContent=a.needs.filter(held).length+'/3 held · Auto-sell for $'+purse(a)+' + '+claimPoints(i)+' pts';
  return el}
@@ -300,7 +303,7 @@ function render(){paintDistrict();$('clubOpen').textContent='★ '+state.club.po
  $('completedLabel').textContent='Completed collections ('+completed.length+')';
  $('completedList').replaceChildren(...completed.map(a=>{
   const el=document.createElement('article'),h=document.createElement('h3'),detail=document.createElement('small'),b=document.createElement('button');
-  h.textContent=a.name;const pieces=piecesFor(a);detail.textContent=a.needs.map(r=>(owns(r)?'✓ ':'')+(r.color==null?'':dyeNames[r.color]+' ')+rows[r.id][1]+(r.min?' (Rare+)':'')).join(' · ');
+  h.textContent=a.name;const pieces=piecesFor(a);detail.textContent=a.needs.map(r=>(owns(r)?'✓ ':'')+rows[r.id][1]+(r.color==null?'':' · '+colorDescription(r.id,r.color))+(r.min?' (Rare+)':'')).join(' · ');
   b.disabled=!pieces;b.textContent=pieces?'Review bundle sale · +25%':a.needs.filter(owns).length+'/'+a.needs.length+' pieces in storage';
   b.onclick=()=>previewBundle(a);el.append(h,detail,b);return el;
  }));
