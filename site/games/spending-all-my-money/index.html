@@ -1,0 +1,64 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Spending All My Money</title>
+<style>
+*{box-sizing:border-box}body{margin:0;color:#262c26;background:#faf5e9;font:16px system-ui}main,header>div{max-width:780px;margin:auto;padding:14px}header{background:#163e36;color:#fff8e7}h1{font: bold clamp(24px,6vw,43px) Georgia;margin:0 0 10px}button{font:inherit;font-weight:650;border:1px solid #30554b;border-radius:8px;background:#fffdf4;color:#184035;padding:9px 12px;cursor:pointer;min-height:44px}button:active{transform:translateY(1px)}button:disabled{opacity:.6}nav,.metrics,.actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.metrics{justify-content:space-between;font-size:15px}nav{position:sticky;top:0;background:#faf5e9;padding:8px 0;z-index:1}nav button[aria-pressed=true],.buy{background:#195247;color:white}#notice{min-height:24px;margin:8px 0;color:#713b20}#items{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(192px,100%),1fr));gap:12px}article{padding:14px;border:1px solid #d0c5ae;border-radius:12px;background:#fffdf7;display:grid;align-content:start;gap:8px}article h3{font: bold 21px Georgia;margin:0}.icon{font-size:36px}small{color:#536156}h2{font: bold 26px Georgia;margin:12px 0}.sale{color:#963e23;font-weight:bold}.row{padding:12px 0;border-bottom:1px dashed #b9ae99;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}#restart{margin:22px 0 10px}dialog{max-width:92vw;border:0;border-radius:12px;padding:22px}dialog::backdrop{background:#172921aa}
+</style><header><div><h1>Spending All My Money</h1><div class="metrics"><span>Wallet <b id="wallet"></b></span><span>Total Spent <b id="score"></b></span><span id="space"></span></div></div></header>
+<main><nav><button id="shop">Shop</button><button id="storage">Storage</button><button id="work">Work +$20</button></nav><p id="notice" role="status"></p><section id="store"><h2>Today's finds</h2><div id="items"></div></section><section id="bin" hidden><h2 id="tier"></h2><div id="upgrade"></div><div id="stock"></div><h2>Collections</h2><div id="sets"></div><button id="restart">Start over</button></section></main>
+<dialog id="confirm"><p>Start over with $80 and an empty suitcase?</p><button id="cancel">Keep playing</button> <button id="reset">Start over</button></dialog>
+<script>
+const rows = [
+['🔦','Flashlight',16],['🪑','Folding chair',32,2],['🧊','Picnic cooler',48,2],
+['☕','Coffee mug',12],['🫘','Coffee beans',18],['🫖','Gooseneck kettle',42,2],
+['🧤','Garden gloves',14],['🪴','Basil plant',20],['🚿','Watering can',24],
+['🎧','Headphones',56],['📻','Pocket radio',36],['🎙️','Microphone',44],
+['🎲','Dice set',8],['🃏','Playing cards',10],['♟️','Chess set',28,2],
+['🖌️','Paintbrush kit',16],['🎨','Watercolors',26],['📓','Sketchbook',12],
+['🍳','Cast iron skillet',50,2],['🧂','Pepper mill',22],['🥄','Wooden spoons',10],
+['🕶️','Sunglasses',18],['🏖️','Beach umbrella',60,2],['🩴','Flip-flops',14],
+['🛠️','Tool kit',64,2],['📏','Tape measure',12],['🔩','Jar of bolts',8],
+['📸','Film camera',76],['🖼️','Picture frame',14],['🎞️','Film roll',18],
+['🧣','Wool scarf',24],['🧢','Ball cap',16],['🧦','Lucky socks',10],
+['📚','Mystery novels',18,2],['🕯️','Reading candle',14],['💡','Desk lamp',36,2]
+];
+const collections=['Ready for a Camping Trip','Coffee Break','Kitchen Garden','Radio Hour','Game Night','Art Afternoon','Sunday Supper','Beach Day','Garage Workshop','Photo Walk','Cozy Weekend','Reading Nook'];
+const tiers=[['Suitcase',6],['Closet',16,100],['Garage',40,250],['Warehouse',100,600]];
+const key='pocketArcade.spending.v1', $=id=>document.getElementById(id);
+const fresh=()=>({cash:80,spent:0,tier:0,bag:[],sets:[],start:Date.now()});
+let state=fresh();
+try{const saved=JSON.parse(localStorage.getItem(key));if(saved&&Array.isArray(saved.bag)&&tiers[saved.tier])state=saved}catch{}
+function save(){try{localStorage.setItem(key,JSON.stringify(state))}catch{}}
+const size=i=>rows[i][3]||1;
+const used=()=>state.bag.reduce((n,x)=>n+size(x.id),0);
+function quote(i,now){const interval=45000, window=18000;
+ const elapsed=Math.max(0,now-state.start);
+ const phase=(elapsed+i*7919)%interval;
+ const price=rows[i][2];
+ return phase<window?{cost:Math.floor(price*.6),seconds:Math.ceil((window-phase)/1000)}:{cost:price,seconds:0}}
+function notice(msg){$('notice').textContent=msg}
+function buy(i){const q=quote(i,Date.now()),regular=rows[i][2];
+ if(q.cost!==Number(cards[i].button.dataset.price)){prices();notice('The price changed. Check the new price before buying.');return}
+ if(used()+size(i)>tiers[state.tier][1])return notice('Storage is full for this item. Sell, toss or upgrade in Storage.');
+ if(q.cost>state.cash)return notice('Short on cash? Tap Work to earn $20.');
+ state.cash-=q.cost;state.spent+=q.cost;state.bag.push({id:i,paid:q.cost});
+ let msg='Bought '+rows[i][1]+'.'+(q.seconds?' You saved $'+(regular-q.cost)+'!':'');
+ const group=Math.floor(i/3);
+ if(!state.sets.includes(group)&&[0,1,2].every(k=>state.bag.some(x=>x.id===group*3+k))){
+ state.sets.push(group);msg+=' Collection complete: '+collections[group]+'!'}
+ save();render();notice(msg)}
+const cards=rows.map(([icon,name],i)=>{const el=document.createElement('article');
+ el.innerHTML='<span class="icon" aria-hidden="true">'+icon+'</span><h3>'+name+'</h3><small>'+size(i)+' storage slot'+(size(i)>1?'s':'')+' · '+collections[Math.floor(i/3)]+'</small><span></span><button class="buy"></button>';
+ const button=el.lastElementChild;button.onclick=()=>buy(i);$('items').append(el);
+ return {button,label:button.previousElementSibling}});
+function prices(){const now=Date.now();cards.forEach(({button,label},i)=>{const q=quote(i,now);button.dataset.price=q.cost;button.textContent='Buy · $'+q.cost;
+ label.className=q.seconds?'sale':'';label.textContent=q.seconds?'Was $'+rows[i][2]+' · '+q.seconds+'s left':'Regular price'})}
+function discard(index,sell){const x=state.bag[index],value=sell?Math.floor(x.paid/2):0;state.bag.splice(index,1);state.cash+=value;save();render();notice(sell?'Sold '+rows[x.id][1]+' for $'+value+'.':'Tossed '+rows[x.id][1]+'.')}
+function render(){const [tier,cap]=tiers[state.tier];$('wallet').textContent='$'+state.cash;$('score').textContent='$'+state.spent;$('space').textContent=tier+' '+used()+'/'+cap;
+ $('tier').textContent='Your '+tier.toLowerCase();const next=tiers[state.tier+1];$('upgrade').replaceChildren();
+ if(next){const b=document.createElement('button');b.textContent='Upgrade to '+next[0]+' · '+next[1]+' slots · $'+next[2];b.onclick=()=>{if(state.cash<next[2])return notice('Earn $'+(next[2]-state.cash)+' more to upgrade.');state.cash-=next[2];state.spent+=next[2];state.tier++;save();render();notice('Moved into the '+next[0].toLowerCase()+'!')};$('upgrade').append(b)}
+ $('stock').textContent=state.bag.length?'':'Your '+tier.toLowerCase()+' is empty. Browse the shop to fill it.';
+ state.bag.forEach((x,index)=>{const row=document.createElement('div');row.className='row';row.innerHTML='<strong>'+rows[x.id][0]+' '+rows[x.id][1]+'</strong><div class="actions"><button>Sell · $'+Math.floor(x.paid/2)+'</button><button>Toss</button></div>';const [sell,toss]=row.querySelectorAll('button');sell.onclick=()=>discard(index,true);toss.onclick=()=>discard(index,false);$('stock').append(row)});
+ $('sets').replaceChildren(...collections.map((name,g)=>{const el=document.createElement('p');el.textContent=(state.sets.includes(g)?'✓ ':'')+name+' · '+rows.slice(g*3,g*3+3).map(r=>r[1]).join(', ');return el}));prices()}
+function tab(storage){$('bin').hidden=!storage;$('store').hidden=storage;$('storage').setAttribute('aria-pressed',storage);$('shop').setAttribute('aria-pressed',!storage);window.scrollTo(0,0)}
+$('shop').onclick=()=>tab(false);$('storage').onclick=()=>tab(true);$('work').onclick=()=>{state.cash+=20;save();render();notice('Quick shift finished. You earned $20.')};
+$('restart').onclick=()=>$('confirm').showModal();$('cancel').onclick=()=>$('confirm').close();$('reset').onclick=()=>{state=fresh();save();render();tab(false);notice('Fresh start!');$('confirm').close()};
+tab(false);render();setInterval(prices,500);
+</script></html>

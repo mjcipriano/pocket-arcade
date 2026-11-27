@@ -8,6 +8,14 @@
     "id": "night-signal"
   },
   {
+    "title": "Spending All My Money",
+    "genre": "Shopping",
+    "description": "Hunt for bargains, fill your suitcase and trade up to a garage.",
+    "mark": "$",
+    "color": "#af462a",
+    "id": "spending-all-my-money"
+  },
+  {
     "title": "Tideline",
     "genre": "Strategy",
     "description": "Read the tide. Chart the richest route in six moves.",
