@@ -131,10 +131,11 @@ function paintDistrict(){
  if(!broken.length)appendText(bench,'small','Look for as-is items in the shop. Their reviews reveal the fault.');
  for(const x of broken){const el=appendText(bench,'article','');appendText(el,'strong',itemName(x));appendText(el,'small',workshop[x.id][0]+' · As-is offer $'+resale(x).value+' · Restored offer $'+resale({...x,fault:false,restored:true}).value);
  action(el,x.parts?'Resume repair':'Fit '+workshop[x.id][2]+' · $'+partsCost(x),()=>repair(x))}
- wishlistUI();trophyUI();paintNeighborhood();
+ wishlistUI();trophyUI();paintNeighborhood();paintCraft();
 }
 function setupDistrict(){
- rows.forEach((r,i)=>$('wishProduct').add(new Option(r[1],i)));dyeNames.forEach((n,i)=>$('wishColor').add(new Option(n,i)));grades.forEach((n,i)=>$('wishGrade').add(new Option(n+' or better',i)));
+ $('craftClose').onclick=()=>$('craftDialog').close();
+ rows.slice(0,craftStart).forEach((r,i)=>$('wishProduct').add(new Option(r[1],i)));dyeNames.forEach((n,i)=>$('wishColor').add(new Option(n,i)));grades.forEach((n,i)=>$('wishGrade').add(new Option(n+' or better',i)));
  $('pinWish').onclick=addWish;$('bid').onclick=bid;$('takeLocker').onclick=openLocker;
  $('pass').onclick=()=>{if(state.auction.closed)return;state.auction.closed=true;state.auction.result='Passed. Another lot arrives next delivery.';save();paintDistrict()};
  $('repairLeave').onclick=()=>$('repairDialog').close();$('town').onclick=()=>{paintDistrict();tab('town')};
