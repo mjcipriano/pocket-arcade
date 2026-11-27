@@ -1,5 +1,7 @@
+import {phenomena} from './sector.mjs';
+import {animateField} from './effects.js';
 import {art} from './art.js';
-import {bets,contact,lines,names,newGame,openPod,pays,species,spin} from './engine.mjs';
+import {bets,contact,lines,names,newGame,openPod,pays,species,spin} from './engine.mjs?v=sector1';
 const $=id=>document.getElementById(id);
 const key='pocket-arcade.xeno-vault.v1';
 let state=newGame(),sound=false,turbo=false,busy=false,context;
@@ -27,11 +29,11 @@ const columns=Array.from({length:5},()=>{
   for(let i=0;i<3;i++){const cell=document.createElement('div');cell.className='cell';col.append(cell);}
   return col;
 });
-function drawReel(c){
+function drawReel(c,board=state.board){
   Array.from(columns[c].children).forEach((cell,r)=>{
-    const won=state.hits.some(h=>h.count>c && lines[h.line][c]===r);
+    const won=board===state.board && state.hits.some(h=>h.count>c && lines[h.line][c]===r);
     cell.className='cell'+(won?' win':'')+(state.locked.includes(c*3+r)?' lock':'');
-    cell.replaceChildren(sprite(state.board[c][r]));
+    cell.replaceChildren(sprite(board[c][r]));
   });
 }
 function choices(){
@@ -54,6 +56,11 @@ function render(){
   for(const id of ['credits','vault','last','best'])$(id).textContent=state[id].toLocaleString();
   $('charge').textContent=state.charge+'/8';$('meter').replaceChildren();
   for(let i=0;i<8;i++){const bar=document.createElement('i');bar.className=i<state.charge?'on':'';$('meter').append(bar);}
+  const event=state.event && phenomena[state.event.kind];
+  const step=state.sectorStep??0;
+  const until=step<2?2-step:3-(step-2)%3;
+  $('sectorTitle').textContent=state.mode || event?.name || 'Outer orbit';
+  $('sectorNote').textContent=state.free?'Bonus flight':('Next anomaly in '+until+(until===1?' spin':' spins'));
   $('status').textContent=state.message;
   $('bet').querySelector('b').textContent=state.bet;
   $('bet').disabled=busy || !!(state.free||state.bonus||state.pods);
@@ -79,18 +86,55 @@ $('spin').onclick=async()=>{
   if(busy || state.bonus || state.pods)return;
   clearFlare();wakeAudio();
   if(!state.free && state.credits<state.bet){state.credits+=1000;state.message='Refilled 1,000 free credits.';save();render();return;}
+  const flight=state.free?state.mode:null;
   if(!spin(state))return;
   busy=true;save();$('spin').disabled=true;$('bet').disabled=true;$('status').textContent='Scanning the sector…';
   const quick=turbo || matchMedia('(prefers-reduced-motion: reduce)').matches;
-  columns.forEach(col=>col.classList.add('roll'));
+  const viewport=document.querySelector('.viewport');
+  viewport.classList.remove('active');
+  const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const strips=columns.map(col=>{
+    col.classList.remove('landed');col.classList.add('roll');
+    const strip=document.createElement('div');strip.className='strip';strip.setAttribute('aria-hidden','true');
+    if(!quick){
+      for(let n=0;n<5;n++){
+        const tile=document.createElement('div');tile.append(sprite(Math.floor(Math.random()*8)));strip.append(tile);
+      }
+      col.append(strip);
+    }
+    return strip;
+  });
   for(const [c,col] of columns.entries()){
-    await delay(quick?24:c===0?230:135);drawReel(c);col.classList.remove('roll');tone(220+c*50,.06);
+    await delay(quick?24:c===0?230:135);strips[c].remove();drawReel(c,state.beforeEvent??state.board);col.classList.remove('roll');col.classList.add('landed');tone(220+c*50,.06);
+  }
+  const event=state.event;
+  if(event){
+    const info=phenomena[event.kind];
+    document.body.style.setProperty('--event-color',info.color);viewport.classList.add('active');
+    $('sectorTitle').textContent=info.name;$('sectorNote').textContent='Sector anomaly';
+    $('status').textContent=info.rule;
+    tone({meteor:150,tractor:370,wormhole:490,solar:730}[event.kind],.35);
+    if(!reduced)await animateField($('fx'),event.kind,event.targets,info.color,turbo?280:1050);
+    columns.forEach((_,c)=>drawReel(c));
+    event.targets.forEach(pos=>columns[Math.floor(pos/3)].children[pos%3].classList.add('affected'));
+    if(!quick)await delay(330);
+  }
+  if(flight && !reduced){
+    const wilds=state.board.flat().flatMap((id,pos)=>id===6?[pos]:[]);
+    await animateField($('fx'),flight,wilds,flight==='Oracle'?'#c89aff':'#71f4d3',turbo?160:640);
+  }
+  if(state.hits.length && !reduced){
+    const paths=state.hits.map(hit=>lines[hit.line].slice(0,hit.count).map((row,c)=>c*3+row));
+    await animateField($('fx'),'line',[],'#ffe697',turbo?150:550,paths);
   }
   busy=false;render();celebrate();if(state.bonus || state.last)tone(state.bonus?820:660,.24);
 };
 $('bet').onclick=()=>{state.bet=bets[(bets.indexOf(state.bet)+1)%bets.length];save();render();};
 $('sound').onclick=()=>{sound=!sound;wakeAudio();save();$('sound').textContent=sound?'Sound on':'Sound off';$('sound').setAttribute('aria-pressed',sound);};
 $('turbo').onclick=()=>{turbo=!turbo;save();$('turbo').textContent=turbo?'Turbo on':'Turbo off';$('turbo').setAttribute('aria-pressed',turbo);};
+for(const info of Object.values(phenomena)){
+  const item=document.createElement('li');item.textContent=info.name+' — '+info.rule;$('eventRules').append(item);
+}
 const manual=document.querySelector('dialog');
 $('guide').onclick=()=>manual.showModal();$('close').onclick=()=>manual.close();
 for(const line of lines){

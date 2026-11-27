@@ -1,3 +1,4 @@
+import {sectorEvent,phenomena} from './sector.mjs';
 export const species=['Oracle','Warden','Salvager'];
 export const names=['Oracle','Warden','Salvager','Moon','Crystal','Beacon','Wild','Portal'];
 export const pays=[[6,15,50],[5,12,40],[4,10,35],[3,8,22],[3,7,20],[2,6,18]];
@@ -33,15 +34,18 @@ export function spin(s,rng=Math.random){
     s.locked.push(pos);s.board[Math.floor(pos/3)][pos%3]=6;
   }
   const factor=mode==='Oracle'?pick([2,3,5],rng):1;
-  s.hits=score(s.board,s.bet,factor);
-  s.last=s.hits.reduce((sum,h)=>sum+h.amount,0);
+  const original=s.board.map(reel=>[...reel]);
+  s.event=free?null:sectorEvent(s,rng);
+  s.beforeEvent=s.event?original:null;
+  s.hits=score(s.board,s.bet,factor*(s.event?.factor??1));
+  s.last=s.hits.reduce((sum,h)=>sum+h.amount,s.event?.credits??0);
   const portals=s.board.flat().filter(id=>id===7).length;
   const jackpot=portals>=4;
   if(jackpot){s.last+=s.vault;s.vault=250;}
   s.credits+=s.last;s.best=Math.max(s.best,s.last);
   if(!free){s.charge++;if(portals>=3 || s.charge>=8){s.charge=0;s.bonus=true;}}
   const details=s.hits.map(h=>'L'+(h.line+1)+' +'+h.amount).join(' · ');
-  s.message=[jackpot?'Vault opened!':'',mode==='Oracle'?'Oracle ×'+factor:'',s.last?'Won '+s.last+' credits':'No line win',details].filter(Boolean).join(' · ');
+  s.message=[s.event?phenomena[s.event.kind].name:'',jackpot?'Vault opened!':'',mode==='Oracle'?'Oracle ×'+factor:'',s.last?'Won '+s.last+' credits':'No line win',details].filter(Boolean).join(' · ');
   if(!s.free){s.mode='';s.locked=[];}
   return true;
 }
