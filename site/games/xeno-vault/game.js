@@ -63,6 +63,7 @@ function render(){
   $('sectorNote').textContent=state.free?'Bonus flight':('Next anomaly in '+until+(until===1?' spin':' spins'));
   $('status').textContent=state.message;
   $('bet').querySelector('b').textContent=state.bet;
+  $('restart').disabled=busy;
   $('bet').disabled=busy || !!(state.free||state.bonus||state.pods);
   $('spin').disabled=busy || !!(state.bonus||state.pods);
   $('spin').textContent=state.free?state.mode+' spin · '+state.free+' left':state.credits<state.bet?'Refill free credits':'Spin reels';
@@ -88,7 +89,7 @@ $('spin').onclick=async()=>{
   if(!state.free && state.credits<state.bet){state.credits+=1000;state.message='Refilled 1,000 free credits.';save();render();return;}
   const flight=state.free?state.mode:null;
   if(!spin(state))return;
-  busy=true;save();$('spin').disabled=true;$('bet').disabled=true;$('status').textContent='Scanning the sector…';
+  busy=true;$('restart').disabled=true;save();$('spin').disabled=true;$('bet').disabled=true;$('status').textContent='Scanning the sector…';
   const quick=turbo || matchMedia('(prefers-reduced-motion: reduce)').matches;
   const viewport=document.querySelector('.viewport');
   viewport.classList.remove('active');
@@ -135,6 +136,17 @@ $('turbo').onclick=()=>{turbo=!turbo;save();$('turbo').textContent=turbo?'Turbo 
 for(const info of Object.values(phenomena)){
   const item=document.createElement('li');item.textContent=info.name+' — '+info.rule;$('eventRules').append(item);
 }
+const restartDialog=$('restartDialog');
+$('restart').onclick=()=>{if(!busy)restartDialog.showModal();};
+$('keep').onclick=()=>restartDialog.close();
+$('confirmRestart').onclick=()=>{
+  if(busy)return;
+  state=newGame();
+  clearFlare();
+  document.querySelector('.viewport').classList.remove('active');
+  document.body.style.removeProperty('--event-color');
+  save();render();restartDialog.close();
+};
 const manual=document.querySelector('dialog');
 $('guide').onclick=()=>manual.showModal();$('close').onclick=()=>manual.close();
 for(const line of lines){

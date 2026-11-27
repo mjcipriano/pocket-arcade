@@ -31,7 +31,7 @@ function route() {
   byId('error').textContent = location.hash && !game ? 'Game unavailable. Choose another below.' : '';
   byId('library').hidden = !!game;
   byId('player').hidden = !game;
-  frame.src = game ? './games/' + game.id + '/index.html' : 'about:blank';
+  frame.src = game ? './games/' + game.id + '/index.html?launch=' + Date.now() : 'about:blank';
   byId('title').textContent = game?.title || '';
   frame.title = game?.title || 'Active game';
   document.title = game ? game.title + ' · Pocket Arcade' : 'Pocket Arcade';
@@ -40,7 +40,7 @@ function route() {
 byId('search').oninput = () => { limit = 24; renderMenu(); };
 byId('more').onclick = () => { limit += 24; renderMenu(); };
 try {
-  const response = await fetch('./catalog.json');
+  const response = await fetch('./catalog.json?launch=' + Date.now(), {cache:'no-store'});
   if (!response.ok) throw Error();
   games = await response.json();
   renderMenu();

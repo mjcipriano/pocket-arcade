@@ -13,10 +13,10 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v6
-      - run: node scripts/catalog.mjs
+      - run: node scripts/pages.mjs
       - uses: actions/upload-pages-artifact@v4
         with:
-          path: site
+          path: dist
   publish:
     needs: build
     runs-on: ubuntu-latest
