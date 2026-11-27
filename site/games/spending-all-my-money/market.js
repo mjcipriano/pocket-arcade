@@ -49,17 +49,21 @@ const fading=new Set([4,7,29,34,66,69,75]);
 const collectible=new Set([27,54,67,72,78,81]);
 function vintage(x,now=Date.now()){return !fading.has(x.id)&&(collectible.has(x.id)||x.grade===3)&&now-x.boughtAt>=5400000}
 function heldGrade(x){return Math.max(x.grade??0,vintage(x)?2:0)}
+function retailPrice(id,grade=0){return Math.round(rows[id][2]*[1,1.15,1.45,2][grade])}
 function resale(x,now=Date.now()){
- const age=Math.max(0,now-x.boughtAt),base=Math.floor(x.paid/2);
+ const age=Math.max(0,now-x.boughtAt),retail=x.retail??retailPrice(x.id,x.grade),base=Math.floor(retail/2);
  if(fading.has(x.id)){const steps=Math.min(8,Math.floor(age/600000));return {value:Math.floor(base*(10-steps)/10),label:'Perishable · offer falls every 10 min, down to 20% of the opening offer.'}}
- if(collectible.has(x.id)||x.grade===3){const steps=Math.min(12,Math.floor(age/900000));return {value:Math.floor(x.paid*(5+steps)/10),label:(steps>=6?'Vintage · ':'Collector piece · ')+'offer rises every 15 min, up to 170% of what you paid.'}}
+ if(collectible.has(x.id)||x.grade===3){const steps=Math.min(12,Math.floor(age/900000));return {value:Math.floor(retail*(5+steps)/10),label:(steps>=6?'Vintage · ':'Collector piece · ')+'offer rises every 15 min, up to 170% of full retail.'}}
  return {value:base,label:'Everyday resale · stable offer.'}
 }
 function difference(paid,value){const delta=value-paid;return delta===0?'break even':'$'+Math.abs(delta)+' '+(delta>0?'profit':'loss')}
 const fresh=()=>({job:0,rewarded:[],sound:false,cash:80,spent:0,tier:0,bag:[],sets:[],start:Date.now(),delivery:0,seed:Math.floor(Math.random()*4294967296),advanced:false,shifts:0,sort:'packed',order:0,ready:false,guestReady:null,guestClaimed:null,club:null});
 let state=fresh();
 try{const s=JSON.parse(localStorage.getItem(key));if(s&&Array.isArray(s.bag)&&tiers[s.tier])Object.assign(state,s)}catch{}
-for(const item of state.bag)if(!Number.isFinite(item.boughtAt))item.boughtAt=Date.now();
+for(const item of state.bag){
+ if(!Number.isFinite(item.boughtAt))item.boughtAt=Date.now();
+ item.retail??=retailPrice(item.id,item.grade);
+}
 const ranks=[
  ['Browser',0,0],['Regular',15,10],['Insider',40,20],['Curator',85,35],['Market patron',160,50]
 ];
@@ -109,7 +113,7 @@ const variant=id=>{const v=lot(id,state.delivery,state.seed);if(id>=originalCoun
 let lastSlot=clockSlot();
 function syncClock(){const slot=clockSlot();if(slot===lastSlot)return;lastSlot=slot;unlock();save();catalog();render()}
 
-const regular=id=>Math.round(rows[id][2]*[1,1.15,1.45,2][variant(id).grade]);
+const regular=id=>retailPrice(id,variant(id).grade);
 const itemName=x=>(x.color==null?'Original':dyeNames[x.color])+' '+rows[x.id][1];
 function orderSet(){
  const start=lot(0,state.order,state.seed).color+state.order*7;
@@ -173,7 +177,7 @@ function buy(i){if(!onShelf(i)&&!early(i)){syncClock();return notice('This relea
  if(q.cost!==Number(cards[i].button.dataset.price)){prices();return notice('Price changed. Check the new price before buying.')}
  if(used()+size(i)>tiers[state.tier][1])return notice('Needs '+size(i)+' slots. Sell an item or upgrade storage.','error',true);
  if(q.cost>state.cash)return notice('Earn $'+(q.cost-state.cash)+' more to buy this item.','error');
- const item={id:i,paid:q.cost,boughtAt:Date.now(),...variant(i)};state.cash-=q.cost;state.spent+=q.cost;state.bag.push(item);
+ const item={id:i,paid:q.cost,retail:regular(i),boughtAt:Date.now(),...variant(i)};state.cash-=q.cost;state.spent+=q.cost;state.bag.push(item);
  const discovery=!state.club.seen.includes(i);
  if(discovery){state.club.seen.push(i);earn(2)}
  if(state.club.dealer)state.club.dealer--;
@@ -199,7 +203,7 @@ $('delivery').onclick=()=>{state.delivery++;save();catalog();chime('pack');motio
 function review(id){
  const [spec,positive,caveat]=id<36?legacyProfiles[id]:rows[id].slice(4);let page=0;
  function paint(){const entry=[[5,positive,'Mira'],[4,caveat,'Jules']][page];$('stars').textContent='★'.repeat(entry[0])+'☆'.repeat(5-entry[0]);$('reviewText').textContent=entry[1];$('reviewBy').textContent=entry[2]+' · Review '+(page+1)+' of 2'}
- $('reviewTitle').textContent=rows[id][1];$('spec').textContent=spec+'. '+resale({id,grade:variant(id).grade,paid:regular(id),boughtAt:Date.now()}).label;
+ $('reviewTitle').textContent=rows[id][1];$('spec').textContent=spec+'. '+resale({id,grade:variant(id).grade,boughtAt:Date.now()}).label;
  $('prev').onclick=$('next').onclick=()=>{page=1-page;paint()};paint();$('reviews').showModal()}
 $('reviewClose').onclick=()=>$('reviews').close();
 function discard(index,sell,offer){const x=state.bag[index],value=sell?(offer??netOffer(x).value):0;if(sell&&state.club.broker)state.club.broker--;state.bag.splice(index,1);state.cash+=value;save();render();notice(sell?'Sold '+itemName(x)+' for $'+value+' · You paid $'+x.paid+' · '+difference(x.paid,value)+'.':'Tossed '+rows[x.id][1]+'.')}
@@ -238,7 +242,7 @@ function render(){$('clubOpen').textContent='★ '+state.club.points;$('clubOpen
  $('work').textContent=(state.advanced?'Play shift':'Work')+' +$'+paycheck();$('sound').textContent=state.sound?'Sound on':'Sound off';$('sound').setAttribute('aria-pressed',state.sound);prices()}
 function inspect(index){
  const item=state.bag[index],[icon,name]=rows[item.id];$('detailIcon').textContent=icon;$('itemTitle').textContent=itemName(item);
- $('itemInfo').textContent=(item.edition?grades[item.grade]+' · Delivery '+item.edition:'Original issue')+(vintage(item)?' · Vintage / '+grades[heldGrade(item)]:'')+' · Paid $'+item.paid+' · '+size(item.id)+' storage slot'+(size(item.id)>1?'s':'');
+ $('itemInfo').textContent=(item.edition?grades[item.grade]+' · Delivery '+item.edition:'Original issue')+(vintage(item)?' · Vintage / '+grades[heldGrade(item)]:'')+' · Full retail $'+item.retail+' · Paid $'+item.paid+' · '+size(item.id)+' storage slot'+(size(item.id)>1?'s':'');
  const offer=netOffer(item);$('valuation').textContent=offer.label+' Current offer $'+offer.value+' · '+difference(item.paid,offer.value)+'.';
  $('sellItem').textContent='Sell for $'+offer.value;
  for(const [id,sell] of [['sellItem',true],['tossItem',false]]){
