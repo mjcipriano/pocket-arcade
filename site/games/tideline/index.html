@@ -1,1 +1,11 @@
-<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Tideline</title><link rel="stylesheet" href="../../game.css"><body style="--wash:#255655"><main><p>Move to a neighboring tile to collect its pearls. Visit each tile once. Plan six moves before the tide turns.</p><p id="status" role="status"></p><div class="board tide"></div><button id="reset">New tide</button></main><script type="module" src="game.js"></script></body></html>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#102f37"><title>Tideline</title><link rel="stylesheet" href="tide.css"></head><body><main>
+<header><div><small>TIDELINE · PEARL FISHERY</small><h1 id="name"></h1></div><button id="guide" aria-label="Open sailing guide">?</button></header>
+<section class="ledger" aria-label="Expedition status"><div><small>CHART</small><b id="leg"></b></div><div><small>PEARLS</small><b id="haul"></b></div><div><small>TIDE LEFT</small><b id="time"></b></div></section>
+<p id="objective"></p><div class="chart"><div id="board" aria-label="Sailing chart"></div></div>
+<div class="key"><span>⛵ Boat</span><span>● Pearls</span><span>⚓ Harbor</span><span id="extraKey"></span></div>
+<section id="message" role="status" aria-live="polite"><h2 id="headline"></h2><p id="detail"></p></section>
+<div class="controls"><button id="primary" hidden></button><button id="undo">Undo move</button><button id="retry">Restart chart</button></div>
+<footer><span id="record"></span><small>Tideline v2.0<span data-build></span></small></footer>
+<dialog id="manual"><h2>How to sail</h2><p>Start at the boat and tap a neighboring outlined square. You can sail back through open water. Each pearl bed pays its printed number once.</p><p>Each crossing costs 1 tide. Shallows (≈) cost 2. A supply buoy (⚑) gives back 3 after you cross onto it, once per chart. Reefs (▲) block passage.</p><p>Bring the required pearls to the anchor and tap <b>Dock &amp; bank</b>. You can sail on for gold if you have tide left. Landing with your quota on the final tide banks automatically.</p><button id="close">Back to chart</button></dialog>
+<dialog id="confirm"><h2>Restart this chart?</h2><p>Your banked hauls from earlier charts are safe.</p><button id="keep">Keep sailing</button> <button id="restart">Restart chart</button></dialog>
+<script type="module" src="game.js"></script></main></body></html>
