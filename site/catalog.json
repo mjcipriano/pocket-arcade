@@ -14,5 +14,13 @@
     "mark": "≋",
     "color": "#177e81",
     "id": "tideline"
+  },
+  {
+    "title": "Xeno Vault",
+    "genre": "Arcade slots",
+    "description": "Spin the orbital reels, make first contact, and raid the alien vault.",
+    "mark": "✺",
+    "color": "#9547a8",
+    "id": "xeno-vault"
   }
 ]
