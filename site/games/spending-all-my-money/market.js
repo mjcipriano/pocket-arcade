@@ -50,16 +50,21 @@ const collectible=new Set([27,54,67,72,78,81]);
 function vintage(x,now=Date.now()){return !fading.has(x.id)&&(collectible.has(x.id)||x.grade===3)&&now-x.boughtAt>=5400000}
 function heldGrade(x){return Math.max(x.grade??0,vintage(x)?2:0)}
 function retailPrice(id,grade=0){return Math.round(rows[id][2]*[1,1.15,1.45,2][grade])}
-function resale(x,now=Date.now()){
+function ageOffer(x,now){
  const age=Math.max(0,now-x.boughtAt),retail=x.retail??retailPrice(x.id,x.grade),base=Math.floor(retail/2);
  if(fading.has(x.id)){const steps=Math.min(8,Math.floor(age/600000));return {value:Math.floor(base*(10-steps)/10),label:'Perishable · offer falls every 10 min, down to 20% of the opening offer.'}}
  if(collectible.has(x.id)||x.grade===3){const steps=Math.min(12,Math.floor(age/900000));return {value:Math.floor(retail*(5+steps)/10),label:(steps>=6?'Vintage · ':'Collector piece · ')+'offer rises every 15 min, up to 170% of full retail.'}}
  return {value:base,label:'Everyday resale · stable offer.'}
 }
+function resale(x,now=Date.now()){
+ const offer=ageOffer(x,now),event=eventFactor(x.id,3,now),condition=x.fault ? .4 : x.restored ? 1.3 : 1;
+ return {value:Math.floor(offer.value*condition*event),label:offer.label+(x.fault?' As-is condition: −60%.':x.restored?' Restored: +30%.':'')+(event>1?' '+townEvent(now)[0]+' premium.':'')};
+}
+const costBasis=x=>x.paid+(x.parts||0);
 function difference(paid,value){const delta=value-paid;return delta===0?'break even':'$'+Math.abs(delta)+' '+(delta>0?'profit':'loss')}
-const fresh=()=>({job:0,rewarded:[],sound:false,cash:80,spent:0,tier:0,bag:[],sets:[],start:Date.now(),delivery:0,seed:Math.floor(Math.random()*4294967296),advanced:false,shifts:0,sort:'packed',order:0,ready:false,guestReady:null,guestClaimed:null,guestHistory:[],buyerReceipt:null,club:null});
+const fresh=()=>({wishes:[],patron:0,visits:[0,0,0],auction:{price:0,closed:false},lockerOpened:false,job:0,rewarded:[],sound:false,cash:80,spent:0,tier:0,bag:[],sets:[],start:Date.now(),delivery:0,seed:Math.floor(Math.random()*4294967296),advanced:false,shifts:0,sort:'packed',order:0,ready:false,guestReady:null,guestClaimed:null,guestHistory:[],buyerReceipt:null,club:null});
 let state=fresh();
-try{const s=JSON.parse(localStorage.getItem(key));if(s&&Array.isArray(s.bag)&&tiers[s.tier])Object.assign(state,s)}catch{}
+try{const s=JSON.parse(localStorage.getItem(key));if(s&&Array.isArray(s.bag)&&tiers[s.tier]){Object.assign(state,s);if(!('patron' in s))state.patron=null}}catch{}
 for(const item of state.bag){
  if(!Number.isFinite(item.boughtAt))item.boughtAt=Date.now();
  item.retail??=retailPrice(item.id,item.grade);
@@ -116,16 +121,17 @@ function syncClock(){const slot=clockSlot();if(slot===lastSlot)return;lastSlot=s
 const regular=id=>retailPrice(id,variant(id).grade);
 const itemName=x=>(x.color==null?'Original':dyeNames[x.color])+' '+rows[x.id][1];
 function orderSet(){
+ if(state.patron!=null)return patronOrder();
  const start=lot(0,state.order,state.seed).color+state.order*7;
  const needs=[0,1,2].map((j)=>{const id=(start+j*17)%originalCount;return {id,color:lot(id,state.order,state.seed^849).color}});
- return {name:'Buyer’s request #'+(state.order+1),needs,bonus:120+needs.reduce((sum,r)=>sum+rows[r.id][2],0)};
+ return {name:'Dot’s standing request #'+(state.order+1),needs,bonus:120+needs.reduce((sum,r)=>sum+rows[r.id][2],0)};
 }
 function matches(x,r){return x.id===r.id&&(r.color==null||x.color===r.color)&&heldGrade(x)>=(r.min??0)}
 function owns(r){return state.bag.some(x=>matches(x,r))}
 function piecesFor(a){
  const selected=[];
  for(const r of a.needs){
-  const piece=state.bag.find(x=>!selected.includes(x)&&matches(x,r));
+  const piece=state.bag.find(x=>!x.trophy&&!selected.includes(x)&&matches(x,r));
   if(!piece)return null;
   selected.push(piece);
  }
@@ -136,13 +142,13 @@ function bundleQuote(pieces){
  const now=Date.now(),brokerUses=Math.min(pieces.length,state.club.broker);
  const individual=pieces.map((x,i)=>Math.floor(resale(x,now).value*(i<brokerUses?1.5:1)));
  const subtotal=individual.reduce((sum,n)=>sum+n,0),bonus=Math.ceil(subtotal*.25);
- return {total:subtotal+bonus,bonus,individual,brokerUses,paid:pieces.reduce((sum,x)=>sum+x.paid,0)};
+ return {total:subtotal+bonus,bonus,individual,brokerUses,paid:pieces.reduce((sum,x)=>sum+costBasis(x),0)};
 }
 function previewBundle(a){
  const pieces=piecesFor(a);if(!pieces)return;
  const q=bundleQuote(pieces);$('bundleTitle').textContent=a.name;
  $('bundleList').replaceChildren(...pieces.map((x,i)=>{const li=document.createElement('li');
- li.textContent=itemName(x)+(x.edition?' · delivery '+x.edition:'')+' · paid $'+x.paid+' · offer $'+q.individual[i];return li}));
+ li.textContent=itemName(x)+(x.edition?' · delivery '+x.edition:'')+' · paid $'+x.paid+(x.parts?' + $'+x.parts+' parts':'')+' · offer $'+q.individual[i];return li}));
  $('bundleInfo').textContent='Paid $'+q.paid+' in total · Set bonus +$'+q.bonus+' (25%) · '+difference(q.paid,q.total)+(q.brokerUses?' · Private buyer uses: '+q.brokerUses:'');
  $('bundleSell').textContent='Sell '+pieces.length+' items for $'+q.total;
  $('bundleSell').onclick=()=>{
@@ -157,9 +163,9 @@ function fulfillOrders(){
  while(true){
   const a=orderSet(),pieces=piecesFor(a);if(!pieces&&!state.ready)break;
   // Older saves can have a locked-in reward after the matching pieces were sold.
-  const paid=pieces?pieces.reduce((sum,x)=>sum+x.paid,0):0;
+  const paid=pieces?pieces.reduce((sum,x)=>sum+costBasis(x),0):0;
   if(pieces)unpack(pieces);
-  const cash=purse(a),points=claimPoints(-1);state.cash+=cash;earn(points);state.order++;state.ready=false;
+  const cash=purse(a),points=claimPoints(-1);state.cash+=cash;earn(points);state.order++;advancePatron();state.ready=false;
   state.buyerReceipt=a.name+(pieces?' sold · '+pieces.length+' items · You paid $'+paid+' · '+difference(paid,cash):' · Prior earned reward')+' · +$'+cash+' · +'+points+' pts';
   filled++;
  }
@@ -184,7 +190,7 @@ const used=()=>state.bag.reduce((n,x)=>n+size(x.id),0);
 function quote(i,now){const interval=45000, window=18000;
  const elapsed=Math.max(0,now-state.start);
  const phase=(elapsed+i*7919)%interval;
- const price=regular(i);
+ const price=Math.floor(regular(i)*eventFactor(i,4,now)*(shopFault(i) ? .45 : 1));
  const sale=phase<window,subtotal=sale?Math.floor(price*.6):price;
  return {cost:state.club.dealer?Math.floor(subtotal*.8):subtotal,seconds:sale?Math.ceil((window-phase)/1000):0}}
 let receiptTimer,audio;
@@ -225,7 +231,7 @@ function buy(i){if(!onShelf(i)&&!early(i)){syncClock();return notice('This relea
  if(q.cost!==Number(cards[i].button.dataset.price)){prices();return notice('Price changed. Check the new price before buying.')}
  if(used()+size(i)>tiers[state.tier][1])return notice('Needs '+size(i)+' slots. Sell an item or upgrade storage.','error',true);
  if(q.cost>state.cash)return notice('Earn $'+(q.cost-state.cash)+' more to buy this item.','error');
- const item={id:i,paid:q.cost,retail:regular(i),boughtAt:Date.now(),...variant(i)};state.cash-=q.cost;state.spent+=q.cost;state.bag.push(item);
+ const item={id:i,paid:q.cost,retail:regular(i),fault:shopFault(i),boughtAt:Date.now(),...variant(i)};state.cash-=q.cost;state.spent+=q.cost;state.bag.push(item);
  const discovery=!state.club.seen.includes(i);
  if(discovery){state.club.seen.push(i);earn(2)}
  if(state.club.dealer)state.club.dealer--;
@@ -239,28 +245,30 @@ const cards=rows.map(([icon,name],i)=>{const el=document.createElement('article'
  el.querySelector('.journal').onclick=()=>review(i);const button=el.lastElementChild;button.onclick=()=>buy(i);$('items').append(el);
  return {el,button,label:button.previousElementSibling,badge:el.querySelector('.variant'),journal:el.querySelector('.journal')}});
 function prices(){const now=Date.now();cards.forEach(({button,label,el},i)=>{if(el.hidden)return;const q=quote(i,now);button.dataset.price=q.cost;button.textContent='Buy · $'+q.cost;
- label.className=q.seconds?'sale':'';label.textContent=q.seconds?'Was $'+regular(i)+' · '+q.seconds+'s left':'Regular price';if(state.club.dealer)label.textContent+=' · Dealer −20%'})}
+ label.className=q.seconds?'sale':'';label.textContent=q.seconds?'Was $'+regular(i)+' · '+q.seconds+'s left':'Regular price';if(shopFault(i))label.textContent+=' · As-is −55%';if(eventFactor(i,4,now)<1)label.textContent+=' · Event −25%';if(state.club.dealer)label.textContent+=' · Dealer −20%'})}
 function catalog(){let found=0;const term=$('search').value.trim().toLowerCase();
  cards.forEach((card,id)=>{const {el,badge,journal}=card;
- if(card.issue!==state.delivery){card.issue=state.delivery;card.feed=reviewJournal(id,state.delivery);journal.textContent='★ '+card.feed.average+' · '+card.feed.reviews.length+' reviews'}
+ if(card.issue!==state.delivery){card.issue=state.delivery;card.feed=reviewJournal(id,state.delivery);if(shopFault(id)){card.feed.reviews.unshift({rating:2,body:workshop[id][1],by:'Dot · repair diary'});card.feed.average=(card.feed.reviews.reduce((n,r)=>n+r.rating,0)/card.feed.reviews.length).toFixed(1)}journal.textContent='★ '+card.feed.average+' · '+card.feed.reviews.length+' reviews'}
  const v=variant(id),dept=departments[group(id)];
- badge.textContent=dyeNames[v.color]+' · '+grades[v.grade]+(id>=originalCount?(early(id)?' · Backroom preview':' · Timed release'):'');el.style.setProperty('--ink',inks[v.color]);
- el.hidden=Boolean((!onShelf(id)&&!early(id))||($('department').value==='timed'?id<originalCount:$('department').value&&$('department').value!==dept)||![rows[id][1],collections[group(id)],badge.textContent,dept].join(' ').toLowerCase().includes(term));if(!el.hidden)found++});
+ badge.textContent=dyeNames[v.color]+' · '+grades[v.grade]+(shopFault(id)?' · As-is':'')+(id>=originalCount?(early(id)?' · Backroom preview':' · Timed release'):'');el.style.setProperty('--ink',inks[v.color]);
+ el.hidden=Boolean((!onShelf(id)&&!early(id))||($('department').value==='wishlist'?!state.wishes.some(w=>w.id===id&&wishMatch(w)):$('department').value==='timed'?id<originalCount:$('department').value&&$('department').value!==dept)||![rows[id][1],collections[group(id)],badge.textContent,dept].join(' ').toLowerCase().includes(term));if(!el.hidden)found++});
  $('empty').hidden=found>0;$('batch').textContent='Delivery '+(state.delivery+1)+' · '+found+' finds';$('releaseTime').textContent='Rare shelf changes at '+localTime((clockSlot()+1)*fiveMinutes);
- if(!found&&term){const missing=rows.findIndex((r,i)=>r[1].toLowerCase()===term&&!onShelf(i));$('empty').textContent=missing<0?'No finds match these filters.':rows[missing][1]+' returns at '+localTime(nextOpening(missing))+'.'}else $('empty').textContent='No finds match these filters.';prices()}
+ if(!found&&term){const missing=rows.findIndex((r,i)=>r[1].toLowerCase()===term&&!onShelf(i));$('empty').textContent=missing<0?'No finds match these filters.':rows[missing][1]+' returns at '+localTime(nextOpening(missing))+'.'}else $('empty').textContent='No finds match these filters.';wishlistUI();$('townEvent').textContent=townEvent()[0]+' · '+townEvent()[1]+' until '+localTime((boardSlot()+1)*boardInterval);prices()}
 for(const dept of [...new Set(departments)].sort())$('department').add(new Option(dept,dept));
 $('search').oninput=catalog;$('department').onchange=catalog;
-$('delivery').onclick=()=>{state.delivery++;save();catalog();chime('pack');motion($('items'),[{opacity:.4},{opacity:1}],300)};
+$('delivery').onclick=()=>{state.delivery++;state.auction={price:0,closed:false};state.lockerOpened=false;save();catalog();paintDistrict();chime('pack');motion($('items'),[{opacity:.4},{opacity:1}],300)};
 function review(id){
  const {spec,reviews,average}=cards[id].feed;let page=0,ordered=reviews;
  function paint(){const entry=ordered[page];$('stars').textContent='★'.repeat(entry.rating)+'☆'.repeat(5-entry.rating);$('stars').setAttribute('aria-label',entry.rating+' out of 5 stars');$('reviewText').textContent=entry.body;$('reviewBy').textContent=entry.by+' · Review '+(page+1)+' of '+ordered.length}
+ $('inspectFault').hidden=!shopFault(id);$('faultReport').textContent='';$('inspectFault').onclick=()=>{$('faultReport').textContent=workshop[id][0]+' · '+workshop[id][2]+' costs $'+partsCost({retail:regular(id)})+'. Buy as-is, then repair in Town.'};
+ $('wishThis').onclick=()=>{$('reviews').close();$('wishProduct').value=id;$('wishColor').value=variant(id).color;$('wishGrade').value=variant(id).grade;$('wishForm').open=true;tab('town');$('wishForm').scrollIntoView({block:'nearest'})};
  $('reviewTitle').textContent=rows[id][1];$('spec').textContent=spec+'. '+resale({id,grade:variant(id).grade,boughtAt:Date.now()}).label;
  $('reviewMean').textContent=average+' / 5 · '+reviews.length+' shopper reviews';$('reviewOrder').value='latest';
  $('reviewOrder').onchange=()=>{const sort=$('reviewOrder').value;ordered=sort==='latest'?reviews:[...reviews].sort((a,b)=>sort==='low'?a.rating-b.rating:b.rating-a.rating);page=0;paint()};
  $('prev').onclick=()=>{page=(page+ordered.length-1)%ordered.length;paint()};$('next').onclick=()=>{page=(page+1)%ordered.length;paint()};paint();$('reviews').showModal()}
 $('reviewClose').onclick=()=>$('reviews').close();
-function discard(index,sell,offer){const x=state.bag[index],value=sell?(offer??netOffer(x).value):0;if(sell&&state.club.broker)state.club.broker--;state.bag.splice(index,1);state.cash+=value;save();render();notice(sell?'Sold '+itemName(x)+' for $'+value+' · You paid $'+x.paid+' · '+difference(x.paid,value)+'.':'Tossed '+rows[x.id][1]+'.')}
-function render(){$('clubOpen').textContent='★ '+state.club.points;$('clubOpen').setAttribute('aria-label','Collector club, '+state.club.points+' points');const [tier,cap]=tiers[state.tier];$('wallet').textContent='$'+state.cash;$('score').textContent='$'+state.spent;$('space').textContent=tier+' '+used()+'/'+cap;
+function discard(index,sell,offer){const x=state.bag[index],value=sell?(offer??netOffer(x).value):0;if(x.trophy)return;if(sell&&state.club.broker)state.club.broker--;state.bag.splice(index,1);state.cash+=value;save();render();notice(sell?'Sold '+itemName(x)+' for $'+value+' · You paid $'+x.paid+' · '+difference(costBasis(x),value)+'.':'Tossed '+rows[x.id][1]+'.')}
+function render(){paintDistrict();$('clubOpen').textContent='★ '+state.club.points;$('clubOpen').setAttribute('aria-label','Collector club, '+state.club.points+' points');const [tier,cap]=tiers[state.tier];$('wallet').textContent='$'+state.cash;$('score').textContent='$'+state.spent;$('space').textContent=tier+' '+used()+'/'+cap;
  $('tier').textContent='Your '+tier.toLowerCase();const next=tiers[state.tier+1];$('upgrade').replaceChildren();
  if(next){const b=document.createElement('button');b.textContent='Upgrade to '+next[0]+' · '+next[1]+' slots · $'+next[2];b.onclick=()=>{if(state.cash<next[2])return notice('Earn $'+(next[2]-state.cash)+' more to upgrade.');state.cash-=next[2];state.spent+=next[2];state.tier++;save();render();chime('upgrade');notice('Moved into the '+next[0].toLowerCase()+'!')};$('upgrade').append(b)}
  $('case').dataset.tier=state.tier;$('caseLabel').textContent=tier+' · '+used()+' / '+cap+' slots';
@@ -280,9 +288,10 @@ function render(){$('clubOpen').textContent='★ '+state.club.points;$('clubOpen
  }
  function entry(a,i){const el=document.createElement('article'),done=i===-2?state.guestReady!=null:i===-1?state.ready:state.sets.includes(i),paid=i>=0&&state.rewarded.includes(i);
  const heading=document.createElement('h3');heading.textContent=a.name;el.append(heading);
- for(const r of a.needs){const button=document.createElement('button');button.className='piece';button.textContent=(owns(r)?'✓ ':'⌕ ')+(r.color==null?'':dyeNames[r.color]+' ')+rows[r.id][1]+(r.min?' · Rare or better':'');button.onclick=()=>{$('search').value=rows[r.id][1];$('department').value='';catalog();tab(false)};el.append(button)}
+ const held=r=>i===-1?state.bag.some(x=>!x.trophy&&matches(x,r)):owns(r);
+ for(const r of a.needs){const button=document.createElement('button');button.className='piece';button.textContent=(held(r)?'✓ ':'⌕ ')+(r.color==null?'':dyeNames[r.color]+' ')+rows[r.id][1]+(r.min?' · Rare or better':'');button.onclick=()=>{$('search').value=rows[r.id][1];$('department').value='';catalog();tab(false)};el.append(button)}
  const footer=document.createElement(done&&!paid?'button':'small');footer.textContent=paid?'✓ Claimed · $'+a.bonus:done?'Claim $'+purse(a)+' + '+claimPoints(i)+' pts':a.needs.filter(owns).length+'/3 held · $'+purse(a)+' + '+claimPoints(i)+' pts';if(done&&!paid){footer.className='buy';footer.onclick=()=>claim(i)}el.append(footer);
- if(i===-1)footer.textContent=a.needs.filter(owns).length+'/3 held · Auto-sell for $'+purse(a)+' + '+claimPoints(i)+' pts';
+ if(i===-1)footer.textContent=a.needs.filter(held).length+'/3 held · Auto-sell for $'+purse(a)+' + '+claimPoints(i)+' pts';
  return el}
  $('commission').replaceChildren(entry(orderSet(),-1));
  $('buyerReceipt').textContent=state.buyerReceipt||'The buyer takes one of each requested item as soon as all three are in storage.';
@@ -303,16 +312,20 @@ function render(){$('clubOpen').textContent='★ '+state.club.points;$('clubOpen
  const locked=albums.filter(a=>(a.requires||0)>state.rewarded.length);
  $('progress').textContent=state.rewarded.length+' claimed'+(locked.length?' · Next: '+locked[0].name+' at '+locked[0].requires+' claimed.':' · All permanent collections unlocked.');
  $('sets').replaceChildren(...albums.map((a,i)=>({a,i})).filter(({a,i})=>!state.rewarded.includes(i)&&(a.requires||0)<=state.rewarded.length).sort((x,y)=>Number(state.sets.includes(y.i)&&!state.rewarded.includes(y.i))-Number(state.sets.includes(x.i)&&!state.rewarded.includes(x.i))).map(({a,i})=>entry(a,i)));
+ $('buyerHistory').textContent=patrons.map((p,i)=>p.name+' · '+state.visits[i]+' orders').join('  /  ')+' · Regular status introduces Inez. Two orders with a buyer unlock their specialty.';
  const pending=Number(state.guestReady!=null)+state.sets.filter(i=>!state.rewarded.includes(i)).length+Number(state.ready);
  $('book').textContent='Collections'+(pending?' ('+pending+')':'');$('mode').textContent='Mode: '+(state.advanced?'Advanced':'Casual');$('mode').setAttribute('aria-pressed',state.advanced);
  $('work').textContent=(state.advanced?'Play shift':'Work')+' +$'+paycheck();$('sound').textContent=state.sound?'Sound on':'Sound off';$('sound').setAttribute('aria-pressed',state.sound);prices()}
 function inspect(index){
  const item=state.bag[index],[icon,name]=rows[item.id];$('detailIcon').textContent=icon;$('itemTitle').textContent=itemName(item);
  $('itemInfo').textContent=(item.edition?grades[item.grade]+' · Delivery '+item.edition:'Original issue')+(vintage(item)?' · Vintage / '+grades[heldGrade(item)]:'')+' · Full retail $'+item.retail+' · Paid $'+item.paid+' · '+size(item.id)+' storage slot'+(size(item.id)>1?'s':'');
- const offer=netOffer(item);$('valuation').textContent=offer.label+' Current offer $'+offer.value+' · '+difference(item.paid,offer.value)+'.';
+ $('itemTrophy').textContent=item.trophy?'Take off trophy shelf':'Display on trophy shelf';$('itemTrophy').onclick=()=>{$('itemDialog').close();toggleTrophy(item)};
+ $('sellItem').disabled=$('tossItem').disabled=Boolean(item.trophy);
+ if(item.parts)$('itemInfo').textContent+=' · Parts $'+item.parts;
+ const offer=netOffer(item);$('valuation').textContent=offer.label+' Current offer $'+offer.value+' · '+difference(costBasis(item),offer.value)+'.';
  $('sellItem').textContent='Sell for $'+offer.value;
  for(const [id,sell] of [['sellItem',true],['tossItem',false]]){
-   $(id).onclick=()=>{$('itemDialog').close();discard(index,sell,offer.value);chime(sell?'sell':'pack')};
+   $(id).onclick=()=>{const current=state.bag.indexOf(item);if(current<0||item.trophy)return;$('itemDialog').close();discard(current,sell,offer.value);chime(sell?'sell':'pack')};
  }
  $('itemDialog').showModal();chime('pack');
 }
@@ -336,9 +349,9 @@ $('promote').onclick=()=>{
 };
 $('sound').onclick=()=>{state.sound=!state.sound;save();render();chime('buy')};
 $('pack').onclick=()=>{tab(true);$('receipt').hidden=true;chime('pack')};
-function tab(view){for(const [button,panel,value] of [['shop','store',false],['storage','bin',true],['book','album','album']]){
+function tab(view){for(const [button,panel,value] of [['shop','store',false],['storage','bin',true],['book','album','album'],['town','district','town']]){
  const active=value===view;$(panel).hidden=!active;$(button).setAttribute('aria-pressed',active)}$('shelves').scrollTop=0}
-$('shop').onclick=()=>tab(false);$('storage').onclick=()=>tab(true);$('book').onclick=()=>tab('album');
+$('shop').onclick=()=>{if(state.wishes.some(wishMatch))browseWishes();else tab(false)};$('storage').onclick=()=>tab(true);$('book').onclick=()=>tab('album');
 $('sort').onchange=()=>{state.sort=$('sort').value;save();render()};
 $('mode').onclick=()=>{state.advanced=!state.advanced;save();render();notice(state.advanced?'Advanced shifts pay double. Finish the task to collect your wages.':'Casual work pays with one tap.')};
 function paycheck(){return jobs[state.job][1]*(state.advanced?2:1)}
@@ -362,4 +375,4 @@ function shift(){
  panel.showModal()}
 $('leave').onclick=()=>$('shift').close();$('work').onclick=()=>state.advanced?shift():pay();
 $('restart').onclick=()=>$('confirm').showModal();$('cancel').onclick=()=>$('confirm').close();$('reset').onclick=()=>{state=fresh();enroll();$('search').value='';$('department').value='';catalog();save();render();tab(false);notice('Fresh start!');$('confirm').close()};
-unlock();save();catalog();tab(false);render();setInterval(()=>{if(lastSlot!==clockSlot())syncClock();else if(!$('store').hidden)prices()},500);
+setupDistrict();unlock();save();catalog();tab(false);render();setInterval(()=>{if(lastSlot!==clockSlot())syncClock();else if(!$('store').hidden)prices()},500);
