@@ -107,7 +107,7 @@ function catalog(){let found=0;const term=$('search').value.trim().toLowerCase()
  cards.forEach(({el,badge},id)=>{const v=variant(id),dept=departments[group(id)];
  badge.textContent=dyeNames[v.color]+' · '+grades[v.grade];el.style.setProperty('--ink',inks[v.color]);
  el.hidden=Boolean(($('department').value&&$('department').value!==dept)||![rows[id][1],collections[group(id)],badge.textContent,dept].join(' ').toLowerCase().includes(term));if(!el.hidden)found++});
- $('empty').hidden=found>0;$('batch').textContent='Delivery '+(state.delivery+1)+' · '+found+' finds · Ink is common. Marigold and Cherry are scarce.';prices()}
+ $('empty').hidden=found>0;$('batch').textContent='Delivery '+(state.delivery+1)+' · '+found+' finds';prices()}
 for(const dept of [...new Set(departments)].sort())$('department').add(new Option(dept,dept));
 $('search').oninput=catalog;$('department').onchange=catalog;
 $('delivery').onclick=()=>{state.delivery++;save();catalog();chime('pack');motion($('items'),[{opacity:.4},{opacity:1}],300)};
@@ -163,7 +163,9 @@ function paintJobs(){
  }));
  $('promote').hidden=!next;if(next)$('promote').textContent='Upgrade · $'+next[2];
 }
-$('career').onclick=()=>{paintJobs();$('jobMessage').textContent='';$('jobDialog').showModal()};
+$('settingsOpen').onclick=()=>$('settings').showModal();
+$('settingsClose').onclick=()=>$('settings').close();
+$('career').onclick=()=>{$('settings').close();paintJobs();$('jobMessage').textContent='';$('jobDialog').showModal()};
 $('closeJob').onclick=()=>$('jobDialog').close();
 $('promote').onclick=()=>{
  const next=jobs[state.job+1];if(!next)return;
@@ -173,7 +175,7 @@ $('promote').onclick=()=>{
 $('sound').onclick=()=>{state.sound=!state.sound;save();render();chime('buy')};
 $('pack').onclick=()=>{tab(true);$('receipt').hidden=true;chime('pack')};
 function tab(view){for(const [button,panel,value] of [['shop','store',false],['storage','bin',true],['book','album','album']]){
- const active=value===view;$(panel).hidden=!active;$(button).setAttribute('aria-pressed',active)}window.scrollTo(0,0)}
+ const active=value===view;$(panel).hidden=!active;$(button).setAttribute('aria-pressed',active)}$('shelves').scrollTop=0}
 $('shop').onclick=()=>tab(false);$('storage').onclick=()=>tab(true);$('book').onclick=()=>tab('album');
 $('sort').onchange=()=>{state.sort=$('sort').value;save();render()};
 $('mode').onclick=()=>{state.advanced=!state.advanced;save();render();notice(state.advanced?'Advanced shifts pay double. Finish the task to collect your wages.':'Casual work pays with one tap.')};

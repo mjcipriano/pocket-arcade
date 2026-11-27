@@ -31,6 +31,7 @@ function route() {
   byId('error').textContent = location.hash && !game ? 'Game unavailable. Choose another below.' : '';
   byId('library').hidden = !!game;
   byId('player').hidden = !game;
+  document.body.classList.toggle('playing', Boolean(game));
   frame.src = game ? './games/' + game.id + '/index.html?launch=' + Date.now() : 'about:blank';
   byId('title').textContent = game?.title || '';
   frame.title = game?.title || 'Active game';
